@@ -4,7 +4,7 @@
 local ADDON_NAME, ns = ...
 
 -- Keep equal to ## Version in the .toc.
-local VERSION = "0.1.10"
+local VERSION = "0.1.11"
 ns.VERSION = VERSION
 -- The addon's name as the player sees it: the start of chat lines.
 local ADDON_TITLE = "Forever Countdown"
@@ -108,12 +108,18 @@ end
 -- The infinity sign as a calligraphic silver ribbon, like the swash of the Forever logo: a
 -- lemniscate, thick where it runs across a pen nib held at an angle and thin along it, with a
 -- dark edge, and the strand through the crossing drawn again on top so one strand passes over
--- the other. A light runs around it (see Animate). A glow behind it read as a white smudge in
+-- the other. A light runs along it (see Animate). A glow behind it read as a white smudge in
 -- game and was dropped (0.1.7).
 local INFINITY_STEPS = 120
 local NIB = math.rad(-38)
 local INFINITY_THIN = 1.1
 local INFINITY_THICK = 2.2
+local TRACE_LENGTH = 16 -- discs in the light's section, out of INFINITY_STEPS around
+local TRACE_STRENGTH = 0.7 -- the light at the middle of its section
+local HALO_SPREAD = 2.4 -- how much wider than the ribbon the light's halo is
+local HALO_STRENGTH = 0.3 -- the halo's brightness, as a share of the light's
+-- Where the strand runs under the crossing: the light dims there so the strand on top stays on top.
+local UNDER_FIRST, UNDER_LAST = math.floor(INFINITY_STEPS * 0.725), math.ceil(INFINITY_STEPS * 0.775)
 local CROSSING_EDGE_TRIM = 5 -- steps at each end of the over strand without an edge, so it joins smoothly
 local function CreateInfinity(parent, width)
 	local height = width * 60 / 124
@@ -158,8 +164,24 @@ local function CreateInfinity(parent, width)
 	local overFirst, overLast = math.floor(INFINITY_STEPS * 0.19), math.ceil(INFINITY_STEPS * 0.31)
 	Pass(ribbon, overFirst + CROSSING_EDGE_TRIM, overLast - CROSSING_EDGE_TRIM, "OVERLAY", 0, 0.9, Edge)
 	Pass(ribbon, overFirst, overLast, "OVERLAY", 1, 0, Silver)
-	frame.spark = Disc(ribbon, "OVERLAY", 2, 0, 0, INFINITY_THICK + 1.5, 1, 1, 0.94, 0.9)
-	frame.spark:SetBlendMode("ADD")
+	-- The light: a section of the ribbon lighting up and sliding along it, as the design has
+	-- it (a single white disc read as a ball in game, 0.1.10). Discs as wide as the ribbon where
+	-- they are, added on top, brightest in the middle of the section and fading at its ends.
+	frame.widths = {}
+	for i = 0, INFINITY_STEPS - 1 do
+		frame.widths[i] = Width(i)
+	end
+	-- Each step of the light is a core as wide as the ribbon and a faint halo a little wider,
+	-- so it glows past the ribbon's edges.
+	frame.trace, frame.halo = {}, {}
+	for k = 1, TRACE_LENGTH do
+		local halo = Disc(ribbon, "OVERLAY", 3, 0, 0, INFINITY_THIN, 1, 0.97, 0.8)
+		halo:SetBlendMode("ADD")
+		frame.halo[k] = halo
+		local core = Disc(ribbon, "OVERLAY", 4, 0, 0, INFINITY_THIN, 1, 0.99, 0.9)
+		core:SetBlendMode("ADD")
+		frame.trace[k] = core
+	end
 	return frame
 end
 
@@ -485,13 +507,27 @@ local function Animate()
 	for i, ink in ipairs(quill.ink) do
 		ink:SetAlpha(i <= written and inkAlpha or 0)
 	end
-	-- A light runs around the infinity sign.
-	local points = infinity.points
-	local position = (time % TRACE_PERIOD) / TRACE_PERIOD * INFINITY_STEPS
-	local index = math.floor(position)
-	local p, q = points[index], points[(index + 1) % INFINITY_STEPS]
-	local k = position - index
-	infinity.spark:SetPoint("CENTER", infinity, "TOPLEFT", p[1] + (q[1] - p[1]) * k, -(p[2] + (q[2] - p[2]) * k))
+	-- The light slides along the infinity sign.
+	local points, widths = infinity.points, infinity.widths
+	local head = (time % TRACE_PERIOD) / TRACE_PERIOD * INFINITY_STEPS
+	for k, disc in ipairs(infinity.trace) do
+		local position = (head - (k - 1)) % INFINITY_STEPS
+		local index = math.floor(position)
+		local p, q = points[index], points[(index + 1) % INFINITY_STEPS]
+		local f = position - index
+		local x, y = p[1] + (q[1] - p[1]) * f, -(p[2] + (q[2] - p[2]) * f)
+		local halo = infinity.halo[k]
+		disc:SetPoint("CENTER", infinity, "TOPLEFT", x, y)
+		halo:SetPoint("CENTER", infinity, "TOPLEFT", x, y)
+		disc:SetSize(widths[index], widths[index])
+		halo:SetSize(widths[index] + HALO_SPREAD, widths[index] + HALO_SPREAD)
+		local alpha = TRACE_STRENGTH * math.sin(math.pi * (k - 0.5) / TRACE_LENGTH)
+		if index >= UNDER_FIRST and index < UNDER_LAST then
+			alpha = 0
+		end
+		disc:SetAlpha(alpha)
+		halo:SetAlpha(alpha * HALO_STRENGTH)
+	end
 end
 
 local stopped = false

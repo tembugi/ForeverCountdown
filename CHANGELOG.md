@@ -1,3 +1,7 @@
+## v0.1.11
+
+- The light on the infinity sign is a soft streak along the ribbon instead of a ball.
+
 ## v0.1.10
 
 - Minimized, the clock is centered on the title again.
