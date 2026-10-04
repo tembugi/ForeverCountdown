@@ -1,0 +1,12 @@
+## Interface: 16001
+## Title: Forever Countdown
+## Notes: Counts down to WoW Forever's launch, with the beta's end and name reservation on the way.
+## Author: tembugi
+## Version: 0.1.0
+## Category: Miscellaneous
+## AllowLoadGameType: camelot
+## OptionalDeps: Blizzard_ObjectiveTracker
+## SavedVariables: ForeverCountdownDB
+
+Countdown.lua
+ForeverCountdown.lua
