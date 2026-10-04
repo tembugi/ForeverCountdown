@@ -9,6 +9,7 @@ manual-changelog:
 
 ignore:
   - AGENTS.md
+  - Art
   - CLAUDE.md
   - Logo
   - README.md

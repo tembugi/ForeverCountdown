@@ -1,3 +1,7 @@
+## v0.1.13
+
+- The infinity sign by "Forever launches" is smooth.
+
 ## v0.1.12
 
 - The infinity sign and the quill are drawn smoothly.

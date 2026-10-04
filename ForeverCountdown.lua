@@ -4,7 +4,7 @@
 local ADDON_NAME, ns = ...
 
 -- Keep equal to ## Version in the .toc.
-local VERSION = "0.1.12"
+local VERSION = "0.1.13"
 ns.VERSION = VERSION
 -- The addon's name as the player sees it: the start of chat lines.
 local ADDON_TITLE = "Forever Countdown"
@@ -78,10 +78,9 @@ end
 
 -- Drawing ------------------------------------------------------------------------------------
 
--- The game's round, soft-edged texture (Blizzard uses it as a circle mask). The infinity sign
--- and the quill are drawn as many small overlapping discs of it along their curves: drawn with
--- Line objects they didn't show in game (0.1.0 to 0.1.3), and a square light looked like a
--- rectangle.
+-- The game's round, soft-edged texture (Blizzard uses it as a circle mask). The quill and the
+-- infinity sign's light are drawn as small overlapping discs of it: drawn with Line objects
+-- they didn't show in game (0.1.0 to 0.1.3), and a square light looked like a rectangle.
 local DISC = "Interface\\CharacterFrame\\TempPortraitAlphaMask"
 -- Discs aren't snapped to whole pixels: snapped, each small disc grew and jumped to the pixel
 -- grid, and the infinity sign came out heavy and lumpy (0.1.11).
@@ -109,11 +108,14 @@ local function Along(points, spacing)
 	return out
 end
 
--- The infinity sign as a calligraphic silver ribbon, like the swash of the Forever logo: a
--- lemniscate, thick where it runs across a pen nib held at an angle and thin along it, with a
--- dark edge, and the strand through the crossing drawn again on top so one strand passes over
--- the other. A light runs along it (see Animate). A glow behind it read as a white smudge in
--- game and was dropped (0.1.7).
+-- The infinity sign as a calligraphic silver ribbon, like the swash of the Forever logo:
+-- Infinity.tga, drawn by Art/make_art.py (Bernoulli's lemniscate, thick across a slanted pen nib,
+-- thin along it, a dark edge, one strand over the other at the crossing). Drawn in the game from
+-- ~200 small discs it wobbled (0.1.12); as one image it is smooth. The texture covers ART_WIDTH by
+-- ART_HEIGHT units for every 24 of the sign's width, centered on it. A light slides along the
+-- same curve (see Animate).
+local INFINITY_ART = "Interface\\AddOns\\" .. ADDON_NAME .. "\\Infinity"
+local ART_WIDTH, ART_HEIGHT = 28 / 24, 14 / 24
 local INFINITY_STEPS = 120
 local NIB = math.rad(-38)
 local INFINITY_THIN = 1.1
@@ -124,13 +126,15 @@ local HALO_SPREAD = 2.4 -- how much wider than the ribbon the light's halo is
 local HALO_STRENGTH = 0.3 -- the halo's brightness, as a share of the light's
 -- Where the strand runs under the crossing: the light dims there so the strand on top stays on top.
 local UNDER_FIRST, UNDER_LAST = math.floor(INFINITY_STEPS * 0.725), math.ceil(INFINITY_STEPS * 0.775)
-local CROSSING_EDGE_TRIM = 5 -- steps at each end of the over strand without an edge, so it joins smoothly
 local function CreateInfinity(parent, width)
 	local height = width * 60 / 124
 	local frame = CreateFrame("Frame", nil, parent)
 	frame:SetSize(width, height)
-	local ribbon = CreateFrame("Frame", nil, frame)
-	ribbon:SetAllPoints()
+	local art = frame:CreateTexture(nil, "ARTWORK")
+	art:SetTexture(INFINITY_ART)
+	art:SetSize(width * ART_WIDTH, width * ART_HEIGHT)
+	art:SetPoint("CENTER")
+	-- The curve the light follows, the same as the drawing's, in units from the frame's top left.
 	local scale = width / 124
 	local points = {}
 	for i = 0, INFINITY_STEPS do
@@ -139,50 +143,22 @@ local function CreateInfinity(parent, width)
 		points[i] = { (62 + 50 * math.cos(t) / d) * scale, (30 + 62.5 * math.sin(t) * math.cos(t) / d) * scale }
 	end
 	frame.points = points
-	local function Width(i)
-		local p, q = points[(i - 1) % INFINITY_STEPS], points[(i + 1) % INFINITY_STEPS]
-		local angle = math.atan2(q[2] - p[2], q[1] - p[1])
-		return INFINITY_THIN + (INFINITY_THICK - INFINITY_THIN) * math.abs(math.sin(angle - NIB))
-	end
-	local function Silver(f)
-		if f < 0.55 then
-			local k = f / 0.55
-			return 1 - 0.18 * k, 1 - 0.21 * k, 1 - 0.29 * k
-		end
-		local k = (f - 0.55) / 0.45
-		return 0.82 + 0.12 * k, 0.79 + 0.12 * k, 0.71 + 0.14 * k
-	end
-	local function Pass(target, first, last, layer, sublevel, extra, colorAt)
-		for i = first, last - 1 do
-			local p = points[i % INFINITY_STEPS]
-			local r, g, b = colorAt(p[2] / height)
-			Disc(target, layer, sublevel, p[1], p[2], Width(i) + extra, r, g, b)
-		end
-	end
-	local function Edge()
-		return 0.23, 0.16, 0.08
-	end
-	Pass(ribbon, 0, INFINITY_STEPS, "BORDER", 0, 0.9, Edge)
-	Pass(ribbon, 0, INFINITY_STEPS, "ARTWORK", 0, 0, Silver)
-	-- The strand through the crossing at a quarter of the way round, drawn over the other.
-	local overFirst, overLast = math.floor(INFINITY_STEPS * 0.19), math.ceil(INFINITY_STEPS * 0.31)
-	Pass(ribbon, overFirst + CROSSING_EDGE_TRIM, overLast - CROSSING_EDGE_TRIM, "OVERLAY", 0, 0.9, Edge)
-	Pass(ribbon, overFirst, overLast, "OVERLAY", 1, 0, Silver)
-	-- The light: a section of the ribbon lighting up and sliding along it, as the design has
-	-- it (a single white disc read as a ball in game, 0.1.10). Discs as wide as the ribbon where
-	-- they are, added on top, brightest in the middle of the section and fading at its ends.
+	-- The light: a section of the ribbon lighting up and sliding along it, as the design has it
+	-- (a single white disc read as a ball in game, 0.1.10). Discs as wide as the ribbon where they
+	-- are, added on top, brightest in the middle of the section and fading at its ends. Each step
+	-- is a core as wide as the ribbon and a faint halo a little wider, so it glows past the edges.
 	frame.widths = {}
 	for i = 0, INFINITY_STEPS - 1 do
-		frame.widths[i] = Width(i)
+		local p, q = points[(i - 1) % INFINITY_STEPS], points[(i + 1) % INFINITY_STEPS]
+		local angle = math.atan2(q[2] - p[2], q[1] - p[1])
+		frame.widths[i] = INFINITY_THIN + (INFINITY_THICK - INFINITY_THIN) * math.abs(math.sin(angle - NIB))
 	end
-	-- Each step of the light is a core as wide as the ribbon and a faint halo a little wider,
-	-- so it glows past the ribbon's edges.
 	frame.trace, frame.halo = {}, {}
 	for k = 1, TRACE_LENGTH do
-		local halo = Disc(ribbon, "OVERLAY", 3, 0, 0, INFINITY_THIN, 1, 0.97, 0.8)
+		local halo = Disc(frame, "OVERLAY", 0, 0, 0, INFINITY_THIN, 1, 0.97, 0.8)
 		halo:SetBlendMode("ADD")
 		frame.halo[k] = halo
-		local core = Disc(ribbon, "OVERLAY", 4, 0, 0, INFINITY_THIN, 1, 0.99, 0.9)
+		local core = Disc(frame, "OVERLAY", 1, 0, 0, INFINITY_THIN, 1, 0.99, 0.9)
 		core:SetBlendMode("ADD")
 		frame.trace[k] = core
 	end
