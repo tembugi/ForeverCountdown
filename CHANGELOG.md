@@ -1,3 +1,7 @@
+## v0.1.16
+
+- Upcoming dates say "in", such as "Oct 27 · in 22 Days".
+
 ## v0.1.15
 
 - Dates that have passed say how many days ago, such as "Sep 17 · 18 Days ago".

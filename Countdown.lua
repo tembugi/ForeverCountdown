@@ -51,6 +51,7 @@ ns.TEXT = {
 	launches = "launches",
 	launched = "launched",
 	today = "Today",
+	inDays = "in %s", -- the game has no string of its own for this
 }
 
 local MONTHS = { "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec" }
@@ -68,14 +69,14 @@ local function DaysUntil(civilDay, now)
 end
 ns.DaysUntil = DaysUntil
 
--- "Oct 21 · 17 Days", "Oct 21 · Today", or "Sep 17 · 18 Days ago" once the day has passed (the
--- user asked, 0.1.15). D_DAYS is the game's own "%d |4Day:Days;" (the game picks the singular or
+-- "Oct 27 · in 22 Days" before the day (the user asked, 0.1.16), "Oct 21 · Today" on it, and
+-- "Sep 17 · 18 Days ago" once it has passed (the user asked, 0.1.15). D_DAYS is the game's own "%d |4Day:Days;" (the game picks the singular or
 -- plural when it shows it), and "%s ago" is the game's own too.
 local function DayLine(civilDay, now)
 	local days = DaysUntil(civilDay, now)
 	local text = DayText(civilDay)
 	if days > 0 then
-		return text .. " · " .. D_DAYS:format(days)
+		return text .. " · " .. ns.TEXT.inDays:format(D_DAYS:format(days))
 	elseif days == 0 then
 		return text .. " · " .. ns.TEXT.today
 	end
