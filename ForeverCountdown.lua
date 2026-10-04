@@ -4,7 +4,7 @@
 local ADDON_NAME, ns = ...
 
 -- Keep equal to ## Version in the .toc.
-local VERSION = "0.1.11"
+local VERSION = "0.1.12"
 ns.VERSION = VERSION
 -- The addon's name as the player sees it: the start of chat lines.
 local ADDON_TITLE = "Forever Countdown"
@@ -83,9 +83,13 @@ end
 -- Line objects they didn't show in game (0.1.0 to 0.1.3), and a square light looked like a
 -- rectangle.
 local DISC = "Interface\\CharacterFrame\\TempPortraitAlphaMask"
+-- Discs aren't snapped to whole pixels: snapped, each small disc grew and jumped to the pixel
+-- grid, and the infinity sign came out heavy and lumpy (0.1.11).
 local function Disc(frame, layer, sublevel, x, y, size, r, g, b, a)
 	local disc = frame:CreateTexture(nil, layer, nil, sublevel)
 	disc:SetTexture(DISC)
+	disc:SetSnapToPixelGrid(false)
+	disc:SetTexelSnappingBias(0)
 	disc:SetVertexColor(r, g, b, a or 1)
 	disc:SetSize(size, size)
 	disc:SetPoint("CENTER", frame, "TOPLEFT", x, -y)

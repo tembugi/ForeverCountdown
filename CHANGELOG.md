@@ -1,3 +1,7 @@
+## v0.1.12
+
+- The infinity sign and the quill are drawn smoothly.
+
 ## v0.1.11
 
 - The light on the infinity sign is a soft streak along the ribbon instead of a ball.
