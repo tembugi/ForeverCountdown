@@ -1,3 +1,7 @@
+## v0.1.9
+
+- The clock's top lines up with the top of the text beside it.
+
 ## v0.1.8
 
 - The clock lines up with the text beside it.

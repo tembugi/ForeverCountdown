@@ -4,7 +4,7 @@
 local ADDON_NAME, ns = ...
 
 -- Keep equal to ## Version in the .toc.
-local VERSION = "0.1.8"
+local VERSION = "0.1.9"
 ns.VERSION = VERSION
 -- The addon's name as the player sees it: the start of chat lines.
 local ADDON_TITLE = "Forever Countdown"
@@ -35,9 +35,10 @@ local ICON_GAP = 6
 local CLOCK_GAP = 15 -- "launches" to the clock
 local INFINITY_WIDTH = 24
 local CLOCK_EXTRA = 3 -- the clock figures' size over the header text's
--- How far a larger text is raised to share a smaller one's baseline, per unit of size difference,
--- for the tracker's font (measured from a screenshot in game, 0.1.7).
-local BASELINE_RAISE = 0.27
+-- How far a larger text, centered on a smaller one, is lowered so their tops meet, per unit of
+-- size difference, for the tracker's font (measured from a screenshot in game: centered, the
+-- clock's figures stood 2.7 units above the letters' tops at 5 sizes larger, 0.1.7).
+local TOP_ALIGN_DROP = 0.53
 
 -- Colors: the tracker's own when it is loaded, else Blizzard's usual values.
 local function TrackerColor(key, r, g, b)
@@ -536,12 +537,12 @@ local function Relayout()
 	local clockSize = headerSize + CLOCK_EXTRA
 	fullClock:Resize(clockSize)
 	miniClock:Resize(clockSize)
-	-- The clock is larger than the text beside it; centered on it, its figures stood lower than
-	-- the text's baseline (0.1.7). Raised by a share of the size difference, the baselines meet.
+	-- The clock is larger than the text beside it, and its top lines up with the text's top
+	-- (the user's choice, 0.1.9): lowered from centered by a share of the size difference.
 	fullClock:ClearAllPoints()
-	fullClock:SetPoint("LEFT", launchRest, "RIGHT", CLOCK_GAP, (clockSize - lineSize) * BASELINE_RAISE)
+	fullClock:SetPoint("LEFT", launchRest, "RIGHT", CLOCK_GAP, -(clockSize - lineSize) * TOP_ALIGN_DROP)
 	miniClock:ClearAllPoints()
-	miniClock:SetPoint("LEFT", titleWidthTexts[2], "RIGHT", 8, (clockSize - headerSize) * BASELINE_RAISE)
+	miniClock:SetPoint("LEFT", titleWidthTexts[2], "RIGHT", 8, -(clockSize - headerSize) * TOP_ALIGN_DROP)
 	FitWidth()
 	local height = HEADER_HEIGHT + ROW_TOP_GAP
 	for i, row in ipairs(rows) do
