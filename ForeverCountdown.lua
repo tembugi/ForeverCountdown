@@ -4,7 +4,7 @@
 local ADDON_NAME, ns = ...
 
 -- Keep equal to ## Version in the .toc.
-local VERSION = "0.1.2"
+local VERSION = "0.1.3"
 ns.VERSION = VERSION
 -- The addon's name as the player sees it: the start of chat lines.
 local ADDON_TITLE = "Forever Countdown"
@@ -33,7 +33,7 @@ local LINE_GAP = 2 -- a title to the line under it
 local ICON_COLUMN = 20
 local ICON_GAP = 6
 local CLOCK_GAP = 15 -- "launches" to the clock
-local INFINITY_WIDTH = 26
+local INFINITY_WIDTH = 30
 
 -- Colors: the tracker's own when it is loaded, else Blizzard's usual values.
 local function TrackerColor(key, r, g, b)
@@ -73,10 +73,13 @@ end
 
 -- Drawing ------------------------------------------------------------------------------------
 
--- A line between two points given in units from the top left of a frame.
+-- A line between two points given in units from the top left of a frame. It isn't snapped to
+-- whole pixels: snapped, lines thinner than a pixel and a half vanished in game (0.1.2).
 local function Line(frame, layer, sublevel, x1, y1, x2, y2, thickness, r, g, b, a)
 	local line = frame:CreateLine(nil, layer, nil, sublevel)
 	line:SetColorTexture(r, g, b, a or 1)
+	line:SetSnapToPixelGrid(false)
+	line:SetTexelSnappingBias(0)
 	line:SetThickness(thickness)
 	line:SetStartPoint("TOPLEFT", frame, x1, -y1)
 	line:SetEndPoint("TOPLEFT", frame, x2, -y2)
@@ -89,6 +92,8 @@ end
 -- one strand passes over the other. A light runs around it (see Animate).
 local INFINITY_STEPS = 72
 local NIB = math.rad(-38)
+local INFINITY_THIN = 1.6
+local INFINITY_THICK = 3.2
 local function CreateInfinity(parent, width)
 	local height = width * 60 / 124
 	local frame = CreateFrame("Frame", nil, parent)
@@ -101,7 +106,9 @@ local function CreateInfinity(parent, width)
 		points[i] = { (62 + 50 * math.cos(t) / d) * scale, (30 + 62.5 * math.sin(t) * math.cos(t) / d) * scale }
 	end
 	frame.points = points
-	local thin, thick = math.max(1, 1.6 * scale), math.max(2, 7.4 * scale)
+	-- The stroke in UI units, at least 1.6 thick: the drawing's own widths (1.6 to 7.4 in its
+	-- 124-wide frame) were under a pixel at this size.
+	local thin, thick = math.max(INFINITY_THIN, 1.6 * scale), math.max(INFINITY_THICK, 7.4 * scale)
 	local function Pass(first, last, layer, sublevel, extra, colorAt, alpha)
 		local lines = {}
 		for i = first, last - 1 do
@@ -137,7 +144,7 @@ local function CreateInfinity(parent, width)
 	local spark = frame:CreateTexture(nil, "OVERLAY", nil, 2)
 	spark:SetColorTexture(1, 1, 0.94, 0.9)
 	spark:SetBlendMode("ADD")
-	spark:SetSize(math.max(2, 3 * scale * 2), math.max(2, 3 * scale * 2))
+	spark:SetSize(INFINITY_THICK, INFINITY_THICK)
 	frame.spark = spark
 	return frame
 end
@@ -282,17 +289,18 @@ local shining = {}
 local quill, infinity, turnInMarker, turnInWiggle
 local headerFont, lineFont -- the tracker's own font objects
 local launchRest -- "launches" after the shining "Forever" in the launch row
-local launchWordText, miniWordText -- the two "Forever"s the width is measured from
+local launchWordText -- "Forever" in the launch row
+local titleWidthTexts -- the header's "Countdown to" and "Forever"
 local fullClock, miniClock
 
 -- The panel is at least as wide as a tracker section, and wide enough for its longest line:
--- "Forever launches" with the clock beside it, or the minimized header with its clock and the
--- button. The width is the same open and minimized (the user asked, 0.1.1).
+-- "Forever launches" with the clock beside it, or the minimized header ("Countdown to Forever",
+-- the clock and the button). The width is the same open and minimized (the user asked, 0.1.1).
 local RIGHT_MARGIN = 8
 local function FitWidth()
 	local launchLine = HEADER_TEXT_X + ICON_COLUMN + ICON_GAP + launchWordText:GetStringWidth() + 4
 		+ launchRest:GetStringWidth() + CLOCK_GAP + fullClock:GetWidth() + RIGHT_MARGIN
-	local miniLine = HEADER_TEXT_X + miniWordText:GetStringWidth() + 4 + panel.miniRest:GetStringWidth() + 8
+	local miniLine = HEADER_TEXT_X + titleWidthTexts[1]:GetStringWidth() + 4 + titleWidthTexts[2]:GetStringWidth() + 8
 		+ miniClock:GetWidth() + BUTTON_SIZE + RIGHT_MARGIN
 	panel:SetWidth(math.ceil(math.max(HEADER_WIDTH, launchLine, miniLine)))
 end
@@ -382,19 +390,16 @@ local function Refresh()
 		miniClock:Set(days, hours, minutes, seconds)
 		fullClock:Show()
 		miniClock:Show()
-		panel.miniRest:SetText(T.launchesIn)
 	else
 		launchRest:SetText(T.launched)
 		fullClock:Hide()
 		miniClock:Hide()
-		panel.miniRest:SetText(T.launched)
 	end
 end
 
 local function SetMinimized(minimized)
 	saved.minimized = minimized
 	panel.body:SetShown(not minimized)
-	panel.full:SetShown(not minimized)
 	panel.mini:SetShown(minimized)
 	local art = minimized and EXPAND_ART or COLLAPSE_ART
 	panel.button:GetNormalTexture():SetAtlas(art)
@@ -563,7 +568,8 @@ local function Build()
 	art:SetAtlas(HEADER_ART, true)
 	art:SetPoint("CENTER")
 
-	-- Open: "Countdown to" in gold, then the shining "Forever", in the tracker's header font.
+	-- "Countdown to" in gold, then the shining "Forever", in the tracker's header font. It stays
+	-- when minimized (the user asked, 0.1.3).
 	local full = CreateFrame("Frame", nil, header)
 	full:SetAllPoints()
 	local countdownTo = CreateText(full, headerFont)
@@ -573,21 +579,13 @@ local function Build()
 	local fullWord = CreateShiningWord(full, headerFont)
 	fullWord.word:SetPoint("LEFT", countdownTo, "RIGHT", 4, 0)
 	shining[#shining + 1] = fullWord
-	panel.full = full
+	titleWidthTexts = { countdownTo, fullWord.word }
 
-	-- Minimized: the shining "Forever", "launches in" in gold, and the clock.
+	-- Minimized, the clock follows the title.
 	local mini = CreateFrame("Frame", nil, header)
 	mini:SetAllPoints()
-	local miniWord = CreateShiningWord(mini, headerFont)
-	miniWord.word:SetPoint("LEFT", HEADER_TEXT_X, 0)
-	shining[#shining + 1] = miniWord
-	miniWordText = miniWord.word
-	local miniRest = CreateText(mini, headerFont)
-	miniRest:SetTextColor(GOLD.r, GOLD.g, GOLD.b)
-	miniRest:SetPoint("LEFT", miniWord.word, "RIGHT", 4, 0)
-	panel.miniRest = miniRest
 	miniClock = CreateClock(mini)
-	miniClock:SetPoint("LEFT", miniRest, "RIGHT", 8, 0)
+	miniClock:SetPoint("LEFT", fullWord.word, "RIGHT", 8, 0)
 	panel.mini = mini
 
 	local button = CreateFrame("Button", nil, header)

@@ -25,11 +25,11 @@ The tracker's own pieces, read from the game while it runs, with Blizzard's valu
   - "!" (the game's `QuestNormal` art), greyed and still: Beta began.
   - "?" (`QuestTurnin`): Beta ends. It wiggles from side to side on its base for attention, then rests, as a plain-Lua Rotation animation group (the user asked for a wiggle, not a bounce; turning the texture with `SetRotation` didn't show in game, 0.1.2). It stops once the beta is over.
   - A quill drawn from lines in gold, writing a line of ink: Name reservation. The game has no quill art.
-  - The infinity sign drawn from lines as a calligraphic silver ribbon (thick across a slanted nib, thin along it, dark edge, one strand over the other at the crossing), with a light running around it and a pulsing glow: Forever launches. The game's only infinity art is 15 x 9.
+  - The infinity sign drawn from lines as a calligraphic silver ribbon (thick across a slanted nib, thin along it, dark edge, one strand over the other at the crossing), with a light running around it and a pulsing glow: Forever launches. The game's only infinity art is 15 x 9. It is 30 wide with strokes of 1.6 to 3.2 units; lines are not snapped to whole pixels (at 26 wide and 1 to 2 units the ribbon didn't show in game, only its light, 0.1.2).
 - "Forever launches" has the clock to its right, centered on the line, with the launch date and time under it in the player's time zone and the game's 12/24-hour clock setting (`timeMgrUseMilitaryTime`, `TIME_TWELVEHOURAM`/`PM`, `TIME_TWENTYFOURHOURS`).
 - The clock: days, hours, minutes and seconds in the game's heavy number font (`NumberFont_Outline_Huge`'s), white, with gold colons that stay still. Each figure sits in a box as wide as the widest figure, so it doesn't jiggle. The seconds fade in as they tick.
 - Days use the game's `D_DAYS`; "Today" on the day itself.
-- Minimized (the minimize button): only the header, reading the shining "Forever", "launches in" (the header font, like "Countdown to") and the clock. After launch: "Forever launched".
+- Minimized (the minimize button): only the header, still reading "Countdown to Forever", with the clock after it (the user chose this over "Forever launches in", 0.1.3). After launch the clock is gone.
 - Unit labels under the clock, progress bars, paw prints, window borders, close buttons and stamps were tried on the canvas and rejected.
 - Look changes are mocked on the design canvas first (https://claude.ai/artifact/TP8ZFtWEZYej4VEp7DwVKh) and built after the user picks.
 

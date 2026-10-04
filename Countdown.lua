@@ -50,7 +50,6 @@ ns.TEXT = {
 	reservationEnded = "Name reservation ended",
 	launches = "launches",
 	launched = "launched",
-	launchesIn = "launches in",
 	today = "Today",
 }
 

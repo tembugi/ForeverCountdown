@@ -1,3 +1,8 @@
+## v0.1.3
+
+- The infinity sign by "Forever launches" shows, a little larger.
+- Minimized, the header still reads "Countdown to Forever", with the clock after it.
+
 ## v0.1.2
 
 - Text is the same size as the quest tracker's, and follows its Text Size setting in Edit Mode.
