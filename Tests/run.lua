@@ -13,6 +13,7 @@ D_DAYS = "%d |4Day:Days;"
 TIME_TWELVEHOURAM = "%d:%02d AM"
 TIME_TWELVEHOURPM = "%d:%02d PM"
 TIME_TWENTYFOURHOURS = "%d:%02d"
+CURRENCY_TRANSFER_LOG_TIME_FORMAT = "%s ago"
 
 local ns = {}
 assert(loadfile("Countdown.lua"))("ForeverCountdown", ns)
@@ -71,13 +72,14 @@ Test("a Pacific day starts at 07:00 UTC in daylight saving time and 08:00 UTC af
 	Equal(ns.PacificDay(Utc(2026, 11, 3, 8, 0)), ns.CivilDay(2026, 11, 3), "Nov 3 08:00 UTC")
 end)
 
-Test("a day's line counts days, says Today on the day, and drops the count once it has passed", function()
+Test("a day's line counts days, says Today on the day, and counts days ago once it has passed", function()
 	local beta = ns.BETA_END
 	Equal(ns.DayLine(beta, Utc(2026, 10, 4, 12)), "Oct 21 · " .. D_DAYS:format(17), "17 days before")
 	Equal(ns.DayLine(beta, Utc(2026, 10, 21, 6, 59)), "Oct 21 · " .. D_DAYS:format(1), "the evening before, Pacific")
 	Equal(ns.DayLine(beta, Utc(2026, 10, 21, 7)), "Oct 21 · Today", "the day itself")
 	Equal(ns.DayLine(beta, Utc(2026, 10, 22, 6, 59)), "Oct 21 · Today", "the day's last minute, Pacific")
-	Equal(ns.DayLine(beta, Utc(2026, 10, 22, 7)), "Oct 21", "the day after")
+	Equal(ns.DayLine(beta, Utc(2026, 10, 22, 7)), "Oct 21 · " .. D_DAYS:format(1) .. " ago", "the day after")
+	Equal(ns.DayLine(beta, Utc(2026, 10, 31, 12)), "Oct 21 · " .. D_DAYS:format(10) .. " ago", "ten days after")
 end)
 
 Test("the beta's line turns to Beta ended, greyed, the day after its last day", function()
@@ -88,7 +90,8 @@ Test("the beta's line turns to Beta ended, greyed, the day after its last day", 
 	Equal(lines.betaEnds.title, "Beta ended", "the day after")
 	Equal(lines.betaEnds.done, true, "done the day after")
 	Equal(lines.betaBegan.done, true, "beta began is always done")
-	Equal(lines.betaBegan.line, "Sep 17", "beta began's date")
+	Equal(lines.betaBegan.line, "Sep 17 · " .. D_DAYS:format(35) .. " ago", "beta began, 35 days ago")
+	Equal(ns.Lines(Utc(2026, 10, 5, 12)).betaBegan.line, "Sep 17 · " .. D_DAYS:format(18) .. " ago", "beta began, 18 days ago")
 end)
 
 Test("name reservation: starts until October 27 (Today on the day), then ends with November 3", function()
@@ -106,7 +109,7 @@ Test("name reservation: starts until October 27 (Today on the day), then ends wi
 	Equal(lines.reservation.done, false, "not done on the last day")
 	lines = ns.Lines(Utc(2026, 11, 4, 9))
 	Equal(lines.reservation.title, "Name reservation ended", "the day after")
-	Equal(lines.reservation.line, "Nov 3", "the day after")
+	Equal(lines.reservation.line, "Nov 3 · " .. D_DAYS:format(1) .. " ago", "the day after")
 	Equal(lines.reservation.done, true, "done the day after")
 end)
 

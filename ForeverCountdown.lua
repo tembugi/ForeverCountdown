@@ -4,7 +4,7 @@
 local ADDON_NAME, ns = ...
 
 -- Keep equal to ## Version in the .toc.
-local VERSION = "0.1.14"
+local VERSION = "0.1.15"
 ns.VERSION = VERSION
 -- The addon's name as the player sees it: the start of chat lines.
 local ADDON_TITLE = "Forever Countdown"

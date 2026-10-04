@@ -68,8 +68,9 @@ local function DaysUntil(civilDay, now)
 end
 ns.DaysUntil = DaysUntil
 
--- "Oct 21 · 17 Days", "Oct 21 · Today", or just "Oct 21" once the day has passed. D_DAYS is
--- the game's own "%d |4Day:Days;" (the game picks the singular or plural when it shows it).
+-- "Oct 21 · 17 Days", "Oct 21 · Today", or "Sep 17 · 18 Days ago" once the day has passed (the
+-- user asked, 0.1.15). D_DAYS is the game's own "%d |4Day:Days;" (the game picks the singular or
+-- plural when it shows it), and "%s ago" is the game's own too.
 local function DayLine(civilDay, now)
 	local days = DaysUntil(civilDay, now)
 	local text = DayText(civilDay)
@@ -78,7 +79,7 @@ local function DayLine(civilDay, now)
 	elseif days == 0 then
 		return text .. " · " .. ns.TEXT.today
 	end
-	return text
+	return text .. " · " .. (CURRENCY_TRANSFER_LOG_TIME_FORMAT or "%s ago"):format(D_DAYS:format(-days))
 end
 ns.DayLine = DayLine
 
@@ -122,7 +123,7 @@ end
 function ns.Lines(now)
 	local T = ns.TEXT
 	local lines = {}
-	lines.betaBegan = { title = T.betaBegan, line = DayText(ns.BETA_START), done = true }
+	lines.betaBegan = { title = T.betaBegan, line = DayLine(ns.BETA_START, now), done = true }
 	local betaOver = DaysUntil(ns.BETA_END, now) < 0
 	lines.betaEnds = { title = betaOver and T.betaEnded or T.betaEnds, line = DayLine(ns.BETA_END, now), done = betaOver }
 	-- On October 27 itself it still says "starts · Today": Blizzard gave no time of day.
@@ -131,7 +132,7 @@ function ns.Lines(now)
 	elseif DaysUntil(ns.RESERVATION_END, now) >= 0 then
 		lines.reservation = { title = T.reservationEnds, line = DayLine(ns.RESERVATION_END, now), done = false }
 	else
-		lines.reservation = { title = T.reservationEnded, line = DayText(ns.RESERVATION_END), done = true }
+		lines.reservation = { title = T.reservationEnded, line = DayLine(ns.RESERVATION_END, now), done = true }
 	end
 	lines.launched = ns.ClockParts(now) == nil
 	return lines

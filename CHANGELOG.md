@@ -1,3 +1,7 @@
+## v0.1.15
+
+- Dates that have passed say how many days ago, such as "Sep 17 · 18 Days ago".
+
 ## v0.1.14
 
 - The clock is centered on "Forever launches", as in the minimized header.
