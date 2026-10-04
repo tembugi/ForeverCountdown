@@ -2,7 +2,7 @@
 ## Title: Forever Countdown
 ## Notes: Counts down to WoW Forever's launch, with the beta's end and name reservation on the way.
 ## Author: tembugi
-## Version: 0.1.6
+## Version: 0.1.7
 ## Category: Miscellaneous
 ## AllowLoadGameType: camelot
 ## OptionalDeps: Blizzard_ObjectiveTracker

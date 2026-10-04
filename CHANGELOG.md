@@ -1,3 +1,8 @@
+## v0.1.7
+
+- The clock's figures and colons sit evenly together, with the colons centered between the figures.
+- The infinity sign has no glow around it.
+
 ## v0.1.6
 
 - The clock's figures and colons are evenly spaced, larger and easier to read.

@@ -4,7 +4,7 @@
 local ADDON_NAME, ns = ...
 
 -- Keep equal to ## Version in the .toc.
-local VERSION = "0.1.6"
+local VERSION = "0.1.7"
 ns.VERSION = VERSION
 -- The addon's name as the player sees it: the start of chat lines.
 local ADDON_TITLE = "Forever Countdown"
@@ -104,8 +104,8 @@ end
 -- The infinity sign as a calligraphic silver ribbon, like the swash of the Forever logo: a
 -- lemniscate, thick where it runs across a pen nib held at an angle and thin along it, with a
 -- dark edge, and the strand through the crossing drawn again on top so one strand passes over
--- the other. Behind it a pale-blue glow rises and fades, and a light runs around it (see
--- Animate).
+-- the other. A light runs around it (see Animate). A glow behind it read as a white smudge in
+-- game and was dropped (0.1.7).
 local INFINITY_STEPS = 120
 local NIB = math.rad(-38)
 local INFINITY_THIN = 1.1
@@ -115,11 +115,8 @@ local function CreateInfinity(parent, width)
 	local height = width * 60 / 124
 	local frame = CreateFrame("Frame", nil, parent)
 	frame:SetSize(width, height)
-	local glow = CreateFrame("Frame", nil, frame)
-	glow:SetAllPoints()
 	local ribbon = CreateFrame("Frame", nil, frame)
 	ribbon:SetAllPoints()
-	ribbon:SetFrameLevel(glow:GetFrameLevel() + 1)
 	local scale = width / 124
 	local points = {}
 	for i = 0, INFINITY_STEPS do
@@ -151,17 +148,12 @@ local function CreateInfinity(parent, width)
 	local function Edge()
 		return 0.23, 0.16, 0.08
 	end
-	local function Glow()
-		return GLOW[1], GLOW[2], GLOW[3]
-	end
-	Pass(glow, 0, INFINITY_STEPS, "ARTWORK", 0, 2.4, Glow)
 	Pass(ribbon, 0, INFINITY_STEPS, "BORDER", 0, 0.9, Edge)
 	Pass(ribbon, 0, INFINITY_STEPS, "ARTWORK", 0, 0, Silver)
 	-- The strand through the crossing at a quarter of the way round, drawn over the other.
 	local overFirst, overLast = math.floor(INFINITY_STEPS * 0.19), math.ceil(INFINITY_STEPS * 0.31)
 	Pass(ribbon, overFirst + CROSSING_EDGE_TRIM, overLast - CROSSING_EDGE_TRIM, "OVERLAY", 0, 0.9, Edge)
 	Pass(ribbon, overFirst, overLast, "OVERLAY", 1, 0, Silver)
-	frame.glow = glow
 	frame.spark = Disc(ribbon, "OVERLAY", 2, 0, 0, INFINITY_THICK + 1.5, 1, 1, 0.94, 0.9)
 	frame.spark:SetBlendMode("ADD")
 	return frame
@@ -241,26 +233,26 @@ end
 
 -- The countdown: days, hours, minutes and seconds in bold white (the tracker's header font with
 -- a black outline, a few sizes larger than the header text, see Relayout), with larger gold
--- colons that stay still. Each pair of figures and each colon is a text of its own, laid out
--- with the same gap everywhere: as one text the figures and colons sat unevenly, and the
--- colons were too small to read (0.1.5). The seconds fade in as they tick (see Animate).
--- A text out of sight is never measured: the game answered with the font's default size, which
--- spread the figures apart (0.1.4).
+-- colons that stay still. Each pair of figures and each colon is a text of its own that sizes
+-- itself to what it shows, and each follows the one before it at the same small gap: the game
+-- places them by their drawn size. Widths the addon measured itself came out wrong in game and
+-- spread the clock apart (0.1.4, 0.1.6), so nothing is given a width. The larger colons are
+-- raised so their dots sit at the middle of the figures. The seconds fade in as they tick
+-- (see Animate).
 local CLOCK_FLAGS = "OUTLINE"
-local CLOCK_GAP_INNER = 2 -- between a pair of figures and a colon
+local CLOCK_GAP_INNER = 1 -- between a pair of figures and a colon
 local COLON_EXTRA = 4 -- the colons' size over the figures'
+local COLON_RAISE = 0.09 -- how far the colons are raised, as a share of their size
 local function CreateClock(parent, fontObject)
 	local file = fontObject:GetFont()
 	local clock = CreateFrame("Frame", nil, parent)
 	local figurePairs, colons = {}, {}
 	for i = 1, 4 do
 		local pair = CreateText(clock, fontObject)
-		pair:SetJustifyH("CENTER")
 		pair:SetTextColor(WHITE.r, WHITE.g, WHITE.b)
 		figurePairs[i] = pair
 		if i < 4 then
 			local colon = CreateText(clock, fontObject)
-			colon:SetJustifyH("CENTER")
 			colon:SetText(":")
 			colon:SetTextColor(GOLD.r, GOLD.g, GOLD.b)
 			colons[i] = colon
@@ -269,30 +261,32 @@ local function CreateClock(parent, fontObject)
 	clock.secondsText = figurePairs[4]
 	clock.tickedAt = 0
 	function clock:Resize(size)
-		local shown = figurePairs[1]:GetText()
+		local colonSize = size + COLON_EXTRA
+		local raise = math.floor(colonSize * COLON_RAISE + 0.5)
+		figurePairs[1]:ClearAllPoints()
+		figurePairs[1]:SetPoint("LEFT")
 		for i, pair in ipairs(figurePairs) do
 			pair:SetFont(file, size, CLOCK_FLAGS)
-			if colons[i] then
-				colons[i]:SetFont(file, size + COLON_EXTRA, CLOCK_FLAGS)
+			local colon = colons[i]
+			if colon then
+				colon:SetFont(file, colonSize, CLOCK_FLAGS)
+				colon:ClearAllPoints()
+				colon:SetPoint("LEFT", pair, "RIGHT", CLOCK_GAP_INNER, raise)
+				local nextPair = figurePairs[i + 1]
+				nextPair:ClearAllPoints()
+				nextPair:SetPoint("LEFT", colon, "RIGHT", CLOCK_GAP_INNER, -raise)
 			end
 		end
-		figurePairs[1]:SetText("00")
-		local pairWidth = math.ceil(figurePairs[1]:GetUnboundedStringWidth())
-		local colonWidth = math.ceil(colons[1]:GetUnboundedStringWidth())
-		figurePairs[1]:SetText(shown)
-		local x = 0
+		-- The frame's own size only feeds the panel's width (FitWidth): the figures at their
+		-- widest, the colons and the gaps.
+		local width = 0
 		for i, pair in ipairs(figurePairs) do
-			pair:SetWidth(pairWidth)
-			pair:SetPoint("LEFT", x, 0)
-			x = x + pairWidth
+			width = width + math.max(pair:GetStringWidth(), size * 1.2)
 			if colons[i] then
-				x = x + CLOCK_GAP_INNER
-				colons[i]:SetWidth(colonWidth)
-				colons[i]:SetPoint("LEFT", x, 1)
-				x = x + colonWidth + CLOCK_GAP_INNER
+				width = width + colons[i]:GetStringWidth() + 2 * CLOCK_GAP_INNER
 			end
 		end
-		self:SetSize(x, size + COLON_EXTRA + 4)
+		self:SetSize(math.ceil(width), colonSize + 4)
 	end
 	function clock:Set(days, hours, minutes, secs)
 		figurePairs[1]:SetText(string.format("%02d", math.min(days, 99)))
@@ -487,14 +481,13 @@ local function Animate()
 	for i, ink in ipairs(quill.ink) do
 		ink:SetAlpha(i <= written and inkAlpha or 0)
 	end
-	-- A light runs around the infinity sign, which glows like "Forever".
+	-- A light runs around the infinity sign.
 	local points = infinity.points
 	local position = (time % TRACE_PERIOD) / TRACE_PERIOD * INFINITY_STEPS
 	local index = math.floor(position)
 	local p, q = points[index], points[(index + 1) % INFINITY_STEPS]
 	local k = position - index
 	infinity.spark:SetPoint("CENTER", infinity, "TOPLEFT", p[1] + (q[1] - p[1]) * k, -(p[2] + (q[2] - p[2]) * k))
-	infinity.glow:SetAlpha(glowAlpha * GLOW_STRENGTH)
 end
 
 local stopped = false
