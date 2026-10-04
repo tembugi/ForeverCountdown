@@ -7,8 +7,25 @@
 
 -- What Countdown.lua uses from the game, as the game has it: `date` is standard Lua's os.date
 -- (the game's own copy of it), and the strings are the game's enUS ones
--- (BlizzardInterfaceResources, forever branch, GlobalStrings/enUS.lua).
-date = os.date
+-- (BlizzardInterfaceResources, forever branch, GlobalStrings/enUS.lua). To test players in
+-- different time zones, `date` reads local times at a fixed offset from UTC (InZone); os.date
+-- does the same for the computer's own zone. "!" formats are UTC either way.
+local zoneOffset = 0
+date = function(format, moment)
+	if format:sub(1, 1) == "!" then
+		return os.date(format, moment)
+	end
+	return os.date("!" .. format, (moment or os.time()) + zoneOffset * 3600)
+end
+local function InZone(hours, func)
+	local before = zoneOffset
+	zoneOffset = hours
+	local ok, problem = pcall(func)
+	zoneOffset = before
+	if not ok then
+		error(problem, 0)
+	end
+end
 D_DAYS = "%d |4Day:Days;"
 TIME_TWELVEHOURAM = "%d:%02d AM"
 TIME_TWELVEHOURPM = "%d:%02d PM"
@@ -63,25 +80,43 @@ Test("the launch is November 4, 2026, 15:00 PST, which is 23:00 UTC", function()
 	Equal(ns.LAUNCH, Utc(2026, 11, 4, 23), "launch")
 end)
 
-Test("a Pacific day starts at 07:00 UTC in daylight saving time and 08:00 UTC after it", function()
-	Equal(ns.PacificDay(Utc(2026, 10, 21, 6, 59)), ns.CivilDay(2026, 10, 20), "Oct 21 06:59 UTC")
-	Equal(ns.PacificDay(Utc(2026, 10, 21, 7, 0)), ns.CivilDay(2026, 10, 21), "Oct 21 07:00 UTC")
-	-- Daylight saving time ends on November 1 at 2:00 PDT, 09:00 UTC.
-	Equal(ns.PacificDay(Utc(2026, 11, 1, 8, 59)), ns.CivilDay(2026, 11, 1), "Nov 1 08:59 UTC")
-	Equal(ns.PacificDay(Utc(2026, 11, 3, 7, 59)), ns.CivilDay(2026, 11, 2), "Nov 3 07:59 UTC")
-	Equal(ns.PacificDay(Utc(2026, 11, 3, 8, 0)), ns.CivilDay(2026, 11, 3), "Nov 3 08:00 UTC")
+Test("a moment's day is the player's own, in any time zone", function()
+	InZone(3, function()
+		Equal(ns.LocalDay(Utc(2026, 10, 20, 20, 59)), ns.CivilDay(2026, 10, 20), "UTC+3, 23:59 on Oct 20")
+		Equal(ns.LocalDay(Utc(2026, 10, 20, 21, 0)), ns.CivilDay(2026, 10, 21), "UTC+3, midnight starting Oct 21")
+	end)
+	InZone(-7, function()
+		Equal(ns.LocalDay(Utc(2026, 10, 21, 6, 59)), ns.CivilDay(2026, 10, 20), "UTC-7, 23:59 on Oct 20")
+		Equal(ns.LocalDay(Utc(2026, 10, 21, 7, 0)), ns.CivilDay(2026, 10, 21), "UTC-7, midnight starting Oct 21")
+	end)
+	InZone(9, function()
+		Equal(ns.LocalDay(Utc(2026, 10, 20, 15, 0)), ns.CivilDay(2026, 10, 21), "UTC+9, midnight starting Oct 21")
+	end)
 end)
 
 Test("a day's line says in how many days, Today on the day, and how many days ago once it has passed", function()
 	local beta = ns.BETA_END
-	Equal(ns.DayLine(beta, Utc(2026, 10, 4, 12)), "Oct 21 · in " .. D_DAYS:format(17), "17 days before")
-	Equal(ns.DayLine(beta, Utc(2026, 10, 21, 6, 59)), "Oct 21 · in " .. D_DAYS:format(1), "the evening before, Pacific")
-	Equal(ns.DayLine(beta, Utc(2026, 10, 21, 7)), "Oct 21 · Today", "the day itself")
-	Equal(ns.DayLine(beta, Utc(2026, 10, 22, 6, 59)), "Oct 21 · Today", "the day's last minute, Pacific")
-	Equal(ns.DayLine(beta, Utc(2026, 10, 22, 7)), "Oct 21 · " .. D_DAYS:format(1) .. " ago", "the day after")
-	Equal(ns.DayLine(beta, Utc(2026, 10, 31, 12)), "Oct 21 · " .. D_DAYS:format(10) .. " ago", "ten days after")
+	InZone(3, function()
+		Equal(ns.DayLine(beta, Utc(2026, 10, 4, 12)), "Oct 21 · in " .. D_DAYS:format(17), "17 days before")
+		Equal(ns.DayLine(beta, Utc(2026, 10, 20, 20, 59)), "Oct 21 · in " .. D_DAYS:format(1), "the last minute before, local")
+		Equal(ns.DayLine(beta, Utc(2026, 10, 20, 21, 0)), "Oct 21 · Today", "the day's first minute, local")
+		Equal(ns.DayLine(beta, Utc(2026, 10, 21, 20, 59)), "Oct 21 · Today", "the day's last minute, local")
+		Equal(ns.DayLine(beta, Utc(2026, 10, 21, 21, 0)), "Oct 21 · " .. D_DAYS:format(1) .. " ago", "the day after")
+		Equal(ns.DayLine(beta, Utc(2026, 10, 31, 12)), "Oct 21 · " .. D_DAYS:format(10) .. " ago", "ten days after")
+	end)
 end)
 
+Test("the announced date says Today all over the world on that date", function()
+	for _, hours in ipairs({ -10, -8, -7, -5, 0, 1, 2, 3, 5.5, 8, 9, 10, 12, 13 }) do
+		InZone(hours, function()
+			-- Noon on October 21 where the player is.
+			local noon = Utc(2026, 10, 21, 12) - hours * 3600
+			Equal(ns.DayLine(ns.BETA_END, noon), "Oct 21 · Today", "UTC" .. (hours >= 0 and "+" or "") .. hours)
+		end)
+	end
+end)
+
+-- The tests below run in UTC unless they say otherwise.
 Test("the beta's line turns to Beta ended, greyed, the day after its last day", function()
 	local lines = ns.Lines(Utc(2026, 10, 21, 12))
 	Equal(lines.betaEnds.title, "Beta ends", "on the last day")
@@ -138,10 +173,37 @@ Test("a moment reads with the game's 24-hour or 12-hour formats", function()
 	Equal(ns.FormatMoment(t, "Wed", true), "Wed, Nov 5, 15:05", "24-hour, afternoon")
 end)
 
-Test("the launch moment reads in the computer's own time zone", function()
-	local t = os.date("*t", ns.LAUNCH)
-	local expected = os.date("%a", ns.LAUNCH) .. ", Nov " .. t.day .. ", " .. string.format("%d:%02d", t.hour, t.min)
-	Equal(ns.LaunchText(true), expected, "24-hour")
+Test("the launch reads in the player's own time zone", function()
+	-- November 4 at 15:00 PST is 23:00 UTC: Helsinki (UTC+2 in November) sees 01:00 on Thursday,
+	-- California (UTC-8) 15:00 on Wednesday, New York (UTC-5) 18:00, Tokyo (UTC+9) 08:00 Thursday.
+	InZone(2, function()
+		Equal(ns.LaunchText(true), "Thu, Nov 5, 1:00", "Helsinki, 24-hour")
+		Equal(ns.LaunchText(false), "Thu, Nov 5, 1:00 AM", "Helsinki, 12-hour")
+	end)
+	InZone(-8, function()
+		Equal(ns.LaunchText(true), "Wed, Nov 4, 15:00", "California, 24-hour")
+		Equal(ns.LaunchText(false), "Wed, Nov 4, 3:00 PM", "California, 12-hour")
+	end)
+	InZone(-5, function()
+		Equal(ns.LaunchText(false), "Wed, Nov 4, 6:00 PM", "New York")
+	end)
+	InZone(9, function()
+		Equal(ns.LaunchText(true), "Thu, Nov 5, 8:00", "Tokyo")
+	end)
+end)
+
+Test("the clock counts to the same moment in every time zone", function()
+	local now = Utc(2026, 10, 5, 12)
+	local expected
+	for _, hours in ipairs({ -8, 0, 2, 9 }) do
+		InZone(hours, function()
+			local d, h, m, sec = ns.ClockParts(now)
+			local text = string.format("%d %d %d %d", d, h, m, sec)
+			expected = expected or text
+			Equal(text, expected, "UTC" .. hours)
+		end)
+	end
+	Equal(expected, "30 11 0 0", "30 days and 11 hours before")
 end)
 
 Test("NormalizeSaved starts fresh from nothing, another format or something broken", function()

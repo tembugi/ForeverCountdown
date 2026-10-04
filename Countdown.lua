@@ -19,19 +19,21 @@ local function CivilDay(year, month, day)
 end
 ns.CivilDay = CivilDay
 
--- Blizzard announced the dates in Pacific time. Daylight saving time ends on November 1, 2026,
--- at 2:00 (09:00 UTC): before that Pacific time is UTC-7, after it UTC-8.
-local DST_END = CivilDay(2026, 11, 1) * DAY + 9 * HOUR
-
--- The Pacific calendar day a moment (seconds since 1970, UTC) falls on, as days since 1970.
-local function PacificDay(now)
-	local offset = now < DST_END and 7 or 8
-	return math.floor((now - offset * HOUR) / DAY)
+-- The calendar day a moment (seconds since 1970, UTC) falls on in the player's own time zone,
+-- as days since 1970. `date` reads the moment in the computer's time zone.
+local function LocalDay(now)
+	local t = date("*t", now)
+	return CivilDay(tonumber(t.year) or 0, tonumber(t.month) or 0, tonumber(t.day) or 0)
 end
-ns.PacificDay = PacificDay
+ns.LocalDay = LocalDay
 
--- The milestones. The beta's last full day is October 21. Name reservation runs from
--- October 27 through November 3. Launch is November 4 at 3:00 p.m. Pacific (PST), 23:00 UTC.
+-- The milestones, from Blizzard's announcements. The launch has a time: November 4 at 3:00 p.m.
+-- Pacific (PST, UTC-8), so 23:00 UTC, one moment the world over; the clock counts to it and the
+-- launch line shows it in the player's own time zone. The others have only a Pacific date: the
+-- beta's last full day is October 21, and name reservation runs October 27 through November 3.
+-- With no time of day they can't become a local moment, so they show the date as announced and
+-- count days on the player's own calendar: on that date the line says "Today" wherever the player
+-- is (the user asked for local time, 1.0.0; Pacific days made "Today" start at 10:00 in Finland).
 ns.BETA_START = CivilDay(2026, 9, 17)
 ns.BETA_END = CivilDay(2026, 10, 21)
 ns.RESERVATION_START = CivilDay(2026, 10, 27)
@@ -63,9 +65,10 @@ local function DayText(civilDay)
 end
 ns.DayText = DayText
 
--- Days from now to a Pacific calendar day: 0 on the day itself, negative once it has passed.
+-- Days from now to a calendar day, on the player's own calendar: 0 on the day itself, negative
+-- once it has passed.
 local function DaysUntil(civilDay, now)
-	return civilDay - PacificDay(now)
+	return civilDay - LocalDay(now)
 end
 ns.DaysUntil = DaysUntil
 

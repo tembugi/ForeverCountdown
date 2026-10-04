@@ -6,12 +6,11 @@ A panel in the objective tracker's style that counts down to World of Warcraft F
 
 ## Dates
 
-From Blizzard's announcements, in `Countdown.lua`. Blizzard gave times of day only for the launch, so the other milestones count whole Pacific calendar days (the user chose days until times are known).
-- Beta began: September 17, 2026 (always shown as done).
-- Beta ends: October 21, 2026, the beta's last full day.
-- Name reservation: October 27 through November 3, 2026. Until October 27 (and on that day) the line says "Name reservation starts", then "Name reservation ends" with November 3.
-- Launch: November 4, 2026 at 3:00 p.m. PST (23:00 UTC), counted down to the second.
-- Days are Pacific days: daylight saving time ends November 1, 2026 at 09:00 UTC (UTC-7 before, UTC-8 after). The clock uses `GetServerTime()`.
+From Blizzard's announcements, in `Countdown.lua`. Everything the player sees is in their own time, computed from the official times (the user asked, 1.0.0):
+- Launch: November 4, 2026 at 3:00 p.m. PST (UTC-8), so 23:00 UTC, one moment the world over. The clock counts to it with `GetServerTime()` (the realm's clock, right even when the computer's is off), and the launch line shows it in the player's own time zone with `date` and the game's 12/24-hour setting (Helsinki sees Thu, Nov 5, 1:00; California Wed, Nov 4, 3:00 PM).
+- Beta began: September 17, 2026. Beta ends: October 21, 2026, the beta's last full day. Name reservation: October 27 through November 3, 2026; until October 27 (and on that day) the line says "Name reservation starts", then "Name reservation ends" with November 3.
+- These have only a Pacific date, no time of day, so they can't become a local moment: the date shows as announced, and days are counted on the player's own calendar, so on that date the line says "Today" wherever the player is. (With Pacific days, "Today" started at 10:00 in Finland, 0.1.x.)
+- Tests check players in time zones from UTC-10 to UTC+13 with a stand-in for `date` at fixed offsets.
 - A date or time that changes needs a new release. When Blizzard announces a time of day for the beta's end or name reservation, ask the user whether to count those down to the second too.
 
 ## Look

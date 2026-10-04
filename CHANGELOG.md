@@ -1,3 +1,7 @@
+## v1.0.0
+
+- Days count on your own calendar: a date says "Today" all day where you are.
+
 ## v0.1.17
 
 - The clock is in the header after "Countdown to Forever", open or minimized.
