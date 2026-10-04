@@ -56,12 +56,22 @@ ns.TEXT = {
 	inDays = "in %s", -- the game has no string of its own for this
 }
 
-local MONTHS = { "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec" }
+-- Month and weekday names are the game's own, in the player's language (the global strings
+-- FULLDATE_MONTH_* and WEEKDAY_*), as its calendar uses them.
+local MONTH_KEYS = { "JANUARY", "FEBRUARY", "MARCH", "APRIL", "MAY", "JUNE", "JULY", "AUGUST", "SEPTEMBER", "OCTOBER", "NOVEMBER", "DECEMBER" }
+local WEEKDAY_KEYS = { "SUNDAY", "MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY" }
+local function MonthName(month)
+	return _G["FULLDATE_MONTH_" .. MONTH_KEYS[month]]
+end
+local function WeekdayName(weekday)
+	return _G["WEEKDAY_" .. WEEKDAY_KEYS[weekday]]
+end
 
--- "Oct 21" for a calendar day, as Blizzard announced it (no time zone applies).
+-- "October 21" for a calendar day as Blizzard announced it, the way the game's event scheduler
+-- writes a day (EVENT_SCHEDULER_DAY_FORMAT, month name then day).
 local function DayText(civilDay)
 	local t = date("!*t", civilDay * DAY)
-	return MONTHS[t.month] .. " " .. t.day
+	return EVENT_SCHEDULER_DAY_FORMAT:format(MonthName(tonumber(t.month) or 1), tonumber(t.day) or 1)
 end
 ns.DayText = DayText
 
@@ -100,26 +110,18 @@ function ns.ClockParts(now)
 	return days, hours, minutes, math.floor(seconds)
 end
 
--- A moment as "Thu, Nov 5, 1:00" or, with the game's 12-hour clock, "Thu, Nov 5, 1:00 AM",
--- from a date table (date's "*t") and the weekday's short name. The time uses the game's own
--- formats.
-function ns.FormatMoment(t, weekday, twentyFourHours)
-	local clock
-	if twentyFourHours then
-		clock = TIME_TWENTYFOURHOURS:format(t.hour, t.min)
-	else
-		local hour = t.hour % 12
-		if hour == 0 then
-			hour = 12
-		end
-		clock = (t.hour < 12 and TIME_TWELVEHOURAM or TIME_TWELVEHOURPM):format(hour, t.min)
-	end
-	return weekday .. ", " .. MONTHS[t.month] .. " " .. t.day .. ", " .. clock
+-- A moment, from a date table (date's "*t"), as the game writes a date and a time: its full date
+-- (FULLDATE, in the player's language and order) and its clock's time (GameTime_GetFormattedTime,
+-- which follows the 12/24-hour setting as the clock by the minimap does): "Thursday, November 5
+-- 2026, 01:00" or "..., 1:00 AM".
+function ns.FormatMoment(t)
+	local day = FULLDATE:format(WeekdayName(t.wday), MonthName(t.month), t.day, t.year)
+	return day .. ", " .. GameTime_GetFormattedTime(t.hour, t.min, true)
 end
 
 -- The launch moment in the player's own time zone.
-function ns.LaunchText(twentyFourHours)
-	return ns.FormatMoment(date("*t", ns.LAUNCH), tostring(date("%a", ns.LAUNCH)), twentyFourHours)
+function ns.LaunchText()
+	return ns.FormatMoment(date("*t", ns.LAUNCH))
 end
 
 -- What each line of the panel says at a moment: a title, the line under it, and whether the

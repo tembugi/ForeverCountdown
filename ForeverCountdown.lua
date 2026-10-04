@@ -4,7 +4,7 @@
 local ADDON_NAME, ns = ...
 
 -- Keep equal to ## Version in the .toc.
-local VERSION = "1.0.0"
+local VERSION = "1.0.1"
 ns.VERSION = VERSION
 -- The addon's name as the player sees it: the start of chat lines.
 local ADDON_TITLE = "Forever Countdown"
@@ -317,7 +317,7 @@ local titleWidthTexts -- the header's "Countdown to" and "Forever"
 local clock -- the timer, in the header after the title
 
 -- The panel is at least as wide as a tracker section, and wide enough for its longest line:
--- the header ("Countdown to Forever", the clock and the button) or "Forever launches". The width
+-- the header ("Countdown to Forever", the clock and the button) or any row. The width
 -- is the same open and minimized (the user asked, 0.1.1).
 local RIGHT_MARGIN = 8
 local function FitWidth()
@@ -325,7 +325,13 @@ local function FitWidth()
 		+ launchRest:GetStringWidth() + RIGHT_MARGIN
 	local headerLine = HEADER_TEXT_X + titleWidthTexts[1]:GetStringWidth() + 4 + titleWidthTexts[2]:GetStringWidth() + CLOCK_GAP
 		+ clock:GetWidth() + BUTTON_SIZE + RIGHT_MARGIN
-	panel:SetWidth(math.ceil(math.max(HEADER_WIDTH, launchLine, headerLine)))
+	local width = math.max(HEADER_WIDTH, launchLine, headerLine)
+	-- Every row's title and line too: the launch date is the game's full date and time.
+	for _, row in ipairs(rows) do
+		local text = math.max(row.title:GetStringWidth(), row.line:GetStringWidth())
+		width = math.max(width, HEADER_TEXT_X + ICON_COLUMN + ICON_GAP + text + RIGHT_MARGIN)
+	end
+	panel:SetWidth(math.ceil(width))
 end
 
 local function SavePosition()
@@ -405,7 +411,7 @@ local function Refresh()
 		turnInWiggle:Play()
 	end
 	local launchRow = rows[4]
-	launchRow.line:SetText(QUEST_DASH .. ns.LaunchText(GetCVarBool("timeMgrUseMilitaryTime")))
+	launchRow.line:SetText(QUEST_DASH .. ns.LaunchText())
 	local days, hours, minutes, seconds = ns.ClockParts(now)
 	if days then
 		launchRest:SetText(T.launches)
@@ -415,6 +421,9 @@ local function Refresh()
 		launchRest:SetText(T.launched)
 		clock:Hide()
 	end
+	-- The lines' texts change with the days ("Today", "Name reservation ends"), so the width is
+	-- fitted to them again each time.
+	FitWidth()
 end
 
 local function SetMinimized(minimized)

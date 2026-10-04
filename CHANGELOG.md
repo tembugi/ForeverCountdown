@@ -1,3 +1,7 @@
+## v1.0.1
+
+- Dates and times are written the way the game writes them, with its month and weekday names and its clock format.
+
 ## v1.0.0
 
 - Days count on your own calendar: a date says "Today" all day where you are.
