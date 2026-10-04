@@ -4,7 +4,7 @@
 local ADDON_NAME, ns = ...
 
 -- Keep equal to ## Version in the .toc.
-local VERSION = "0.1.7"
+local VERSION = "0.1.8"
 ns.VERSION = VERSION
 -- The addon's name as the player sees it: the start of chat lines.
 local ADDON_TITLE = "Forever Countdown"
@@ -35,6 +35,9 @@ local ICON_GAP = 6
 local CLOCK_GAP = 15 -- "launches" to the clock
 local INFINITY_WIDTH = 24
 local CLOCK_EXTRA = 3 -- the clock figures' size over the header text's
+-- How far a larger text is raised to share a smaller one's baseline, per unit of size difference,
+-- for the tracker's font (measured from a screenshot in game, 0.1.7).
+local BASELINE_RAISE = 0.27
 
 -- Colors: the tracker's own when it is loaded, else Blizzard's usual values.
 local function TrackerColor(key, r, g, b)
@@ -528,9 +531,17 @@ end
 -- as wide as its longest line and as tall as its rows. Runs once built and again whenever the
 -- tracker's Text Size setting changes.
 local function Relayout()
-	local clockSize = select(2, headerFont:GetFont()) + CLOCK_EXTRA
+	local headerSize = select(2, headerFont:GetFont())
+	local lineSize = select(2, lineFont:GetFont())
+	local clockSize = headerSize + CLOCK_EXTRA
 	fullClock:Resize(clockSize)
 	miniClock:Resize(clockSize)
+	-- The clock is larger than the text beside it; centered on it, its figures stood lower than
+	-- the text's baseline (0.1.7). Raised by a share of the size difference, the baselines meet.
+	fullClock:ClearAllPoints()
+	fullClock:SetPoint("LEFT", launchRest, "RIGHT", CLOCK_GAP, (clockSize - lineSize) * BASELINE_RAISE)
+	miniClock:ClearAllPoints()
+	miniClock:SetPoint("LEFT", titleWidthTexts[2], "RIGHT", 8, (clockSize - headerSize) * BASELINE_RAISE)
 	FitWidth()
 	local height = HEADER_HEIGHT + ROW_TOP_GAP
 	for i, row in ipairs(rows) do
@@ -603,7 +614,6 @@ local function Build()
 	local mini = CreateFrame("Frame", nil, header)
 	mini:SetAllPoints()
 	miniClock = CreateClock(mini, headerFont)
-	miniClock:SetPoint("LEFT", fullWord.word, "RIGHT", 8, 0)
 	panel.mini = mini
 
 	local button = CreateFrame("Button", nil, header)
@@ -641,7 +651,6 @@ local function Build()
 	launchRest:SetTextColor(GOLD.r, GOLD.g, GOLD.b)
 	launchRest:SetPoint("LEFT", launchWord.word, "RIGHT", 4, 0)
 	fullClock = CreateClock(launchRow, headerFont)
-	fullClock:SetPoint("LEFT", launchRest, "RIGHT", CLOCK_GAP, 0)
 	launchRow.line:ClearAllPoints()
 	launchRow.line:SetPoint("TOPLEFT", launchWord.word, "BOTTOMLEFT", 0, -LINE_GAP)
 	launchRow.icon:ClearAllPoints()

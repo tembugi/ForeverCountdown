@@ -1,3 +1,7 @@
+## v0.1.8
+
+- The clock lines up with the text beside it.
+
 ## v0.1.7
 
 - The clock's figures and colons sit evenly together, with the colons centered between the figures.
