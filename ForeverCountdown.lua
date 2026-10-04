@@ -4,7 +4,7 @@
 local ADDON_NAME, ns = ...
 
 -- Keep equal to ## Version in the .toc.
-local VERSION = "0.1.9"
+local VERSION = "0.1.10"
 ns.VERSION = VERSION
 -- The addon's name as the player sees it: the start of chat lines.
 local ADDON_TITLE = "Forever Countdown"
@@ -537,12 +537,13 @@ local function Relayout()
 	local clockSize = headerSize + CLOCK_EXTRA
 	fullClock:Resize(clockSize)
 	miniClock:Resize(clockSize)
-	-- The clock is larger than the text beside it, and its top lines up with the text's top
-	-- (the user's choice, 0.1.9): lowered from centered by a share of the size difference.
+	-- The clock is larger than the text beside it. In the launch row its top lines up with the
+	-- text's top (the user's choice, 0.1.9): lowered from centered by a share of the size
+	-- difference. In the minimized header it stays centered on the title (0.1.10).
 	fullClock:ClearAllPoints()
 	fullClock:SetPoint("LEFT", launchRest, "RIGHT", CLOCK_GAP, -(clockSize - lineSize) * TOP_ALIGN_DROP)
 	miniClock:ClearAllPoints()
-	miniClock:SetPoint("LEFT", titleWidthTexts[2], "RIGHT", 8, -(clockSize - headerSize) * TOP_ALIGN_DROP)
+	miniClock:SetPoint("LEFT", titleWidthTexts[2], "RIGHT", 8, 0)
 	FitWidth()
 	local height = HEADER_HEIGHT + ROW_TOP_GAP
 	for i, row in ipairs(rows) do

@@ -1,3 +1,7 @@
+## v0.1.10
+
+- Minimized, the clock is centered on the title again.
+
 ## v0.1.9
 
 - The clock's top lines up with the top of the text beside it.
