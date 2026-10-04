@@ -1,3 +1,8 @@
+## v0.1.4
+
+- The infinity sign by "Forever launches" is drawn so it shows, with a round light running around it.
+- The clock is bolder.
+
 ## v0.1.3
 
 - The infinity sign by "Forever launches" shows, a little larger.

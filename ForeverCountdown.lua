@@ -4,7 +4,7 @@
 local ADDON_NAME, ns = ...
 
 -- Keep equal to ## Version in the .toc.
-local VERSION = "0.1.3"
+local VERSION = "0.1.4"
 ns.VERSION = VERSION
 -- The addon's name as the player sees it: the start of chat lines.
 local ADDON_TITLE = "Forever Countdown"
@@ -73,31 +73,52 @@ end
 
 -- Drawing ------------------------------------------------------------------------------------
 
--- A line between two points given in units from the top left of a frame. It isn't snapped to
--- whole pixels: snapped, lines thinner than a pixel and a half vanished in game (0.1.2).
-local function Line(frame, layer, sublevel, x1, y1, x2, y2, thickness, r, g, b, a)
-	local line = frame:CreateLine(nil, layer, nil, sublevel)
-	line:SetColorTexture(r, g, b, a or 1)
-	line:SetSnapToPixelGrid(false)
-	line:SetTexelSnappingBias(0)
-	line:SetThickness(thickness)
-	line:SetStartPoint("TOPLEFT", frame, x1, -y1)
-	line:SetEndPoint("TOPLEFT", frame, x2, -y2)
-	return line
+-- The game's round, soft-edged texture (Blizzard uses it as a circle mask). The infinity sign
+-- and the quill are drawn as many small overlapping discs of it along their curves: drawn with
+-- Line objects they didn't show in game (0.1.0 to 0.1.3), and a square light looked like a
+-- rectangle.
+local DISC = "Interface\\CharacterFrame\\TempPortraitAlphaMask"
+local function Disc(frame, layer, sublevel, x, y, size, r, g, b, a)
+	local disc = frame:CreateTexture(nil, layer, nil, sublevel)
+	disc:SetTexture(DISC)
+	disc:SetVertexColor(r, g, b, a or 1)
+	disc:SetSize(size, size)
+	disc:SetPoint("CENTER", frame, "TOPLEFT", x, -y)
+	return disc
+end
+
+-- Points along a path, close enough together for discs of the given size to overlap.
+local function Along(points, spacing)
+	local out = { points[1] }
+	for i = 1, #points - 1 do
+		local p, q = points[i], points[i + 1]
+		local steps = math.max(1, math.ceil(math.sqrt((q[1] - p[1]) ^ 2 + (q[2] - p[2]) ^ 2) / spacing))
+		for k = 1, steps do
+			out[#out + 1] = { p[1] + (q[1] - p[1]) * k / steps, p[2] + (q[2] - p[2]) * k / steps }
+		end
+	end
+	return out
 end
 
 -- The infinity sign as a calligraphic silver ribbon, like the swash of the Forever logo: a
--- lemniscate drawn as short lines, thick where it runs across a pen nib held at an angle and
--- thin along it, with a dark edge, and the strand through the crossing drawn again on top so
--- one strand passes over the other. A light runs around it (see Animate).
-local INFINITY_STEPS = 72
+-- lemniscate, thick where it runs across a pen nib held at an angle and thin along it, with a
+-- dark edge, and the strand through the crossing drawn again on top so one strand passes over
+-- the other. Behind it a pale-blue glow rises and fades, and a light runs around it (see
+-- Animate).
+local INFINITY_STEPS = 120
 local NIB = math.rad(-38)
-local INFINITY_THIN = 1.6
-local INFINITY_THICK = 3.2
+local INFINITY_THIN = 1.4
+local INFINITY_THICK = 2.8
+local CROSSING_EDGE_TRIM = 5 -- steps at each end of the over strand without an edge, so it joins smoothly
 local function CreateInfinity(parent, width)
 	local height = width * 60 / 124
 	local frame = CreateFrame("Frame", nil, parent)
 	frame:SetSize(width, height)
+	local glow = CreateFrame("Frame", nil, frame)
+	glow:SetAllPoints()
+	local ribbon = CreateFrame("Frame", nil, frame)
+	ribbon:SetAllPoints()
+	ribbon:SetFrameLevel(glow:GetFrameLevel() + 1)
 	local scale = width / 124
 	local points = {}
 	for i = 0, INFINITY_STEPS do
@@ -106,19 +127,10 @@ local function CreateInfinity(parent, width)
 		points[i] = { (62 + 50 * math.cos(t) / d) * scale, (30 + 62.5 * math.sin(t) * math.cos(t) / d) * scale }
 	end
 	frame.points = points
-	-- The stroke in UI units, at least 1.6 thick: the drawing's own widths (1.6 to 7.4 in its
-	-- 124-wide frame) were under a pixel at this size.
-	local thin, thick = math.max(INFINITY_THIN, 1.6 * scale), math.max(INFINITY_THICK, 7.4 * scale)
-	local function Pass(first, last, layer, sublevel, extra, colorAt, alpha)
-		local lines = {}
-		for i = first, last - 1 do
-			local p, q = points[i % INFINITY_STEPS], points[(i + 1) % INFINITY_STEPS]
-			local angle = math.atan2(q[2] - p[2], q[1] - p[1])
-			local thickness = thin + (thick - thin) * math.abs(math.sin(angle - NIB)) + extra
-			local r, g, b = colorAt((p[2] + q[2]) / 2 / height)
-			lines[#lines + 1] = Line(frame, layer, sublevel, p[1], p[2], q[1], q[2], thickness, r, g, b, alpha)
-		end
-		return lines
+	local function Width(i)
+		local p, q = points[(i - 1) % INFINITY_STEPS], points[(i + 1) % INFINITY_STEPS]
+		local angle = math.atan2(q[2] - p[2], q[1] - p[1])
+		return INFINITY_THIN + (INFINITY_THICK - INFINITY_THIN) * math.abs(math.sin(angle - NIB))
 	end
 	local function Silver(f)
 		if f < 0.55 then
@@ -128,29 +140,34 @@ local function CreateInfinity(parent, width)
 		local k = (f - 0.55) / 0.45
 		return 0.82 + 0.12 * k, 0.79 + 0.12 * k, 0.71 + 0.14 * k
 	end
+	local function Pass(target, first, last, layer, sublevel, extra, colorAt)
+		for i = first, last - 1 do
+			local p = points[i % INFINITY_STEPS]
+			local r, g, b = colorAt(p[2] / height)
+			Disc(target, layer, sublevel, p[1], p[2], Width(i) + extra, r, g, b)
+		end
+	end
 	local function Edge()
 		return 0.23, 0.16, 0.08
 	end
 	local function Glow()
 		return GLOW[1], GLOW[2], GLOW[3]
 	end
-	frame.glow = Pass(0, INFINITY_STEPS, "BACKGROUND", 0, 3, Glow)
-	Pass(0, INFINITY_STEPS, "BORDER", 0, 1.2, Edge)
-	Pass(0, INFINITY_STEPS, "ARTWORK", 0, 0, Silver)
-	-- The strand through the crossing at the top of the loop's parameter, drawn over the other.
+	Pass(glow, 0, INFINITY_STEPS, "ARTWORK", 0, 3, Glow)
+	Pass(ribbon, 0, INFINITY_STEPS, "BORDER", 0, 1.2, Edge)
+	Pass(ribbon, 0, INFINITY_STEPS, "ARTWORK", 0, 0, Silver)
+	-- The strand through the crossing at a quarter of the way round, drawn over the other.
 	local overFirst, overLast = math.floor(INFINITY_STEPS * 0.19), math.ceil(INFINITY_STEPS * 0.31)
-	Pass(overFirst, overLast, "OVERLAY", 0, 1.2, Edge)
-	Pass(overFirst, overLast, "OVERLAY", 1, 0, Silver)
-	local spark = frame:CreateTexture(nil, "OVERLAY", nil, 2)
-	spark:SetColorTexture(1, 1, 0.94, 0.9)
-	spark:SetBlendMode("ADD")
-	spark:SetSize(INFINITY_THICK, INFINITY_THICK)
-	frame.spark = spark
+	Pass(ribbon, overFirst + CROSSING_EDGE_TRIM, overLast - CROSSING_EDGE_TRIM, "OVERLAY", 0, 1.2, Edge)
+	Pass(ribbon, overFirst, overLast, "OVERLAY", 1, 0, Silver)
+	frame.glow = glow
+	frame.spark = Disc(ribbon, "OVERLAY", 2, 0, 0, INFINITY_THICK + 1, 1, 1, 0.94, 0.95)
+	frame.spark:SetBlendMode("ADD")
 	return frame
 end
 
--- The quill, drawn as lines in gold: the shaft, the edge of the vane and the nib. It writes a
--- line of ink under itself (see Animate).
+-- The quill, drawn in gold: the shaft, the edge of the vane and the nib. It writes a line of
+-- ink under itself (see Animate).
 local function Bezier(p0, p1, p2, p3, steps)
 	local points = {}
 	for i = 0, steps do
@@ -164,6 +181,7 @@ local function Bezier(p0, p1, p2, p3, steps)
 	return points
 end
 local SCRIBBLE = { { 3, 25 }, { 5, 23.5 }, { 8, 24 }, { 10, 23 }, { 13, 24 }, { 15, 23 }, { 18, 24 }, { 20, 23 }, { 22, 24 }, { 25, 23 } }
+local QUILL_STROKE = 1.6
 local function CreateQuill(parent, size)
 	local scale = size / 30
 	local frame = CreateFrame("Frame", nil, parent)
@@ -172,23 +190,30 @@ local function CreateQuill(parent, size)
 	pen:SetSize(size, size)
 	pen:SetPoint("TOPLEFT")
 	local r, g, b = GOLD.r, GOLD.g, GOLD.b
-	local function Path(points, thickness)
-		for i = 1, #points - 1 do
-			local p, q = points[i], points[i + 1]
-			Line(pen, "ARTWORK", 0, p[1] * scale, p[2] * scale, q[1] * scale, q[2] * scale, thickness, r, g, b)
+	local function Scaled(points)
+		local out = {}
+		for i, p in ipairs(points) do
+			out[i] = { p[1] * scale, p[2] * scale }
+		end
+		return out
+	end
+	local function Stroke(target, points, thickness, list)
+		for _, p in ipairs(Along(Scaled(points), thickness / 3)) do
+			local disc = Disc(target, "ARTWORK", 0, p[1], p[2], thickness, r, g, b)
+			if list then
+				list[#list + 1] = disc
+			end
 		end
 	end
-	Path(Bezier({ 25, 3 }, { 16, 4 }, { 10, 11 }, { 7, 20 }, 8), 1.3)
-	Path(Bezier({ 25, 3 }, { 24, 10 }, { 18, 15 }, { 11, 16 }, 8), 1)
-	Path({ { 7, 20 }, { 5, 24 } }, 1.3)
+	Stroke(pen, Bezier({ 25, 3 }, { 16, 4 }, { 10, 11 }, { 7, 20 }, 8), QUILL_STROKE)
+	Stroke(pen, Bezier({ 25, 3 }, { 24, 10 }, { 18, 15 }, { 11, 16 }, 8), QUILL_STROKE * 0.8)
+	Stroke(pen, { { 7, 20 }, { 5, 24 } }, QUILL_STROKE)
 	frame.pen = pen
 	frame.ink = {}
-	for i = 1, #SCRIBBLE - 1 do
-		local p, q = SCRIBBLE[i], SCRIBBLE[i + 1]
-		frame.ink[i] = Line(frame, "ARTWORK", 0, p[1] * scale, p[2] * scale, q[1] * scale, q[2] * scale, 1, r, g, b)
-		frame.ink[i]:SetAlpha(0)
+	Stroke(frame, SCRIBBLE, QUILL_STROKE * 0.8, frame.ink)
+	for _, disc in ipairs(frame.ink) do
+		disc:SetAlpha(0)
 	end
-	frame.scale = scale
 	return frame
 end
 
@@ -213,13 +238,15 @@ local function CreateShiningWord(parent, fontObject)
 	return { word = word, glow = glow }
 end
 
--- The countdown: days, hours, minutes and seconds in the game's heavy number font, white with
--- gold colons that stay still, as tall as the tracker's header text (see Relayout). Each figure
+-- The countdown: days, hours, minutes and seconds in the game's heavy number font with its own
+-- black outline (bolder, as the user asked in 0.1.4), white with gold colons that stay still,
+-- as tall as the tracker's header text (see Relayout). Each figure
 -- sits in a box as wide as the widest figure, so the clock doesn't jiggle as its figures change.
 -- The seconds fade in as they tick (see Animate).
 local function CreateClock(parent)
 	local numberFont = Font("NumberFont_Outline_Huge", "GameFontHighlightLarge")
-	local file = numberFont:GetFont()
+	local file, _, outline = numberFont:GetFont()
+	outline = outline ~= "" and outline or "OUTLINE"
 	local clock = CreateFrame("Frame", nil, parent)
 	local measure = CreateText(clock, numberFont)
 	measure:Hide()
@@ -242,7 +269,7 @@ local function CreateClock(parent)
 	clock.cells = cells
 	clock.tickedAt = 0
 	function clock:Resize(size)
-		measure:SetFont(file, size, "")
+		measure:SetFont(file, size, outline)
 		local figure = 0
 		for digit = 0, 9 do
 			measure:SetText(tostring(digit))
@@ -253,13 +280,13 @@ local function CreateClock(parent)
 		figure = math.ceil(figure)
 		local x = 0
 		for i, cell in ipairs(cells) do
-			cell:SetFont(file, size, "")
+			cell:SetFont(file, size, outline)
 			cell:SetWidth(figure)
 			cell:SetPoint("LEFT", x, 0)
 			x = x + figure
 			if i % 2 == 0 and colons[i / 2] then
 				local colon = colons[i / 2]
-				colon:SetFont(file, size, "")
+				colon:SetFont(file, size, outline)
 				colon:SetWidth(colonWidth)
 				colon:SetPoint("LEFT", x, 0)
 				x = x + colonWidth
@@ -467,9 +494,7 @@ local function Animate()
 	local p, q = points[index], points[(index + 1) % INFINITY_STEPS]
 	local k = position - index
 	infinity.spark:SetPoint("CENTER", infinity, "TOPLEFT", p[1] + (q[1] - p[1]) * k, -(p[2] + (q[2] - p[2]) * k))
-	for _, line in ipairs(infinity.glow) do
-		line:SetAlpha(glowAlpha * 0.6)
-	end
+	infinity.glow:SetAlpha(glowAlpha * 0.6)
 end
 
 local stopped = false
