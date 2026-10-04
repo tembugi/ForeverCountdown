@@ -18,18 +18,18 @@ From Blizzard's announcements, in `Countdown.lua`. Blizzard gave times of day on
 
 The tracker's own pieces, read from the game while it runs, with Blizzard's values (from `ObjectiveTrackerModuleHeaderTemplate`) only as fallbacks:
 - Width: at least a tracker section's 260, and wide enough for the longest line ("Forever launches" with the clock beside it, or the minimized header with its clock and button), measured from the texts once they are made. The same width open and minimized (the user asked, 0.1.1). The header is 26 tall with `UI-QuestTracker-Secondary-Objective-Header` art and the section minimize button (`UI-QuestTrackerButton-Secondary-Collapse`/`-Expand`, yellow highlight).
-- Fonts: `ObjectiveTrackerHeaderFont` for the header and `ObjectiveTrackerLineFont` for the lines; colors from `OBJECTIVE_TRACKER_COLOR` (Normal for lines, Complete for what is behind). Titles and the header's gold words use the game's bright gold, `NORMAL_FONT_COLOR` (the tracker's highlight gold): its resting Header gold read too dim in game (the user, 0.1.1).
-- The header reads "Countdown to" (gold, 0.9 of the header font) then "Forever".
+- Fonts and sizes: the tracker's own font objects as they are, `ObjectiveTrackerHeaderFont` for every header word and `ObjectiveTrackerLineFont` for the rows, so they follow its Text Size setting (Edit Mode swaps the font behind both; the user asked for the tracker's sizes, 0.1.2). The clocks are as tall as the header font. The rows stack by their text's height, and a hook on `ObjectiveTrackerManager.SetTextSize` re-measures the clocks, the width and the height on the next frame; colors from `OBJECTIVE_TRACKER_COLOR` (Normal for lines, Complete for what is behind). Titles and the header's gold words use the game's bright gold, `NORMAL_FONT_COLOR` (the tracker's highlight gold): its resting Header gold read too dim in game (the user, 0.1.1).
+- The header reads "Countdown to" (gold) then "Forever", both in the header font.
 - Every "Forever" is white with a pale-blue glow that rises and fades (the word in pale blue a pixel out in eight directions behind it; the game's outlines are always black). A gleam sweeping across the word was dropped after the user saw it in game (0.1.1).
 - Rows, as quests show in the tracker: a marker on the left, a title, and a dashed line under it (`QUEST_DASH`). What is behind is greyed (Complete).
   - "!" (the game's `QuestNormal` art), greyed and still: Beta began.
-  - "?" (`QuestTurnin`): Beta ends. It shakes from side to side for attention, then rests (the user asked for a shake, not a bounce).
+  - "?" (`QuestTurnin`): Beta ends. It wiggles from side to side on its base for attention, then rests, as a plain-Lua Rotation animation group (the user asked for a wiggle, not a bounce; turning the texture with `SetRotation` didn't show in game, 0.1.2). It stops once the beta is over.
   - A quill drawn from lines in gold, writing a line of ink: Name reservation. The game has no quill art.
   - The infinity sign drawn from lines as a calligraphic silver ribbon (thick across a slanted nib, thin along it, dark edge, one strand over the other at the crossing), with a light running around it and a pulsing glow: Forever launches. The game's only infinity art is 15 x 9.
 - "Forever launches" has the clock to its right, centered on the line, with the launch date and time under it in the player's time zone and the game's 12/24-hour clock setting (`timeMgrUseMilitaryTime`, `TIME_TWELVEHOURAM`/`PM`, `TIME_TWENTYFOURHOURS`).
 - The clock: days, hours, minutes and seconds in the game's heavy number font (`NumberFont_Outline_Huge`'s), white, with gold colons that stay still. Each figure sits in a box as wide as the widest figure, so it doesn't jiggle. The seconds fade in as they tick.
 - Days use the game's `D_DAYS`; "Today" on the day itself.
-- Minimized (the minimize button): only the header, reading the shining "Forever", "launches in" (the size of "Countdown to") and the clock. After launch: "Forever launched".
+- Minimized (the minimize button): only the header, reading the shining "Forever", "launches in" (the header font, like "Countdown to") and the clock. After launch: "Forever launched".
 - Unit labels under the clock, progress bars, paw prints, window borders, close buttons and stamps were tried on the canvas and rejected.
 - Look changes are mocked on the design canvas first (https://claude.ai/artifact/TP8ZFtWEZYej4VEp7DwVKh) and built after the user picks.
 

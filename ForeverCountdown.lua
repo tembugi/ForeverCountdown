@@ -4,7 +4,7 @@
 local ADDON_NAME, ns = ...
 
 -- Keep equal to ## Version in the .toc.
-local VERSION = "0.1.1"
+local VERSION = "0.1.2"
 ns.VERSION = VERSION
 -- The addon's name as the player sees it: the start of chat lines.
 local ADDON_TITLE = "Forever Countdown"
@@ -21,21 +21,18 @@ local COLLAPSE_ART = "UI-QuestTrackerButton-Secondary-Collapse"
 local EXPAND_ART = "UI-QuestTrackerButton-Secondary-Expand"
 local BUTTON_HIGHLIGHT_ART = "UI-QuestTrackerButton-Yellow-Highlight"
 local BUTTON_SIZE = 16
-local LINE_FONT_SIZE = 12
-local HEADER_FONT_SIZE = 14
 -- The game's quest marker art: "!" for a quest to pick up, "?" for one to hand in.
 local QUEST_AVAILABLE_ART = "QuestNormal"
 local QUEST_TURN_IN_ART = "QuestTurnin"
 
 -- The panel's own measures, in UI units, from the mockup the user chose (Z9, 2026-10-05).
-local ROW_TOP_GAP = 8 -- header to the first line
-local ROW_STEP = 34 -- one milestone: title, line under it, space
+-- Text sizes are the quest tracker's own (see Build): they follow its Text Size setting.
+local ROW_TOP_GAP = 8 -- header to the first milestone
+local ROW_GAP = 8 -- between milestones
+local LINE_GAP = 2 -- a title to the line under it
 local ICON_COLUMN = 20
 local ICON_GAP = 6
 local CLOCK_GAP = 15 -- "launches" to the clock
-local SMALL_TEXT = 0.9 -- "Countdown to" and "launches in", as a share of the header font
-local CLOCK_SIZE = 14
-local MINI_CLOCK_SIZE = 12.5
 local INFINITY_WIDTH = 26
 
 -- Colors: the tracker's own when it is loaded, else Blizzard's usual values.
@@ -61,12 +58,12 @@ local function Font(objectName, fallbackName)
 	return _G[objectName] or _G[fallbackName]
 end
 
--- A text in one of the game's fonts, at a size of its own, with the tracker's shadow.
-local function CreateText(parent, fontObject, size, layer)
+-- A text in one of the game's fonts. Without a size it keeps the font object itself, so it
+-- changes when the game changes that object (the tracker's Text Size setting swaps the font
+-- behind ObjectiveTrackerLineFont and ObjectiveTrackerHeaderFont). It has the tracker's shadow.
+local function CreateText(parent, fontObject, layer)
 	local text = parent:CreateFontString(nil, layer or "ARTWORK")
 	text:SetFontObject(fontObject)
-	local file, ownSize, flags = fontObject:GetFont()
-	text:SetFont(file, size or ownSize, flags)
 	text:SetShadowOffset(1, -1)
 	text:SetShadowColor(0, 0, 0, 1)
 	text:SetJustifyH("LEFT")
@@ -193,13 +190,13 @@ end
 -- pale blue, a pixel out in each direction, behind it. (A gleam sweeping across the word was
 -- tried in 0.1.0 and dropped by the user.)
 local GLOW_OFFSETS = { { -1, 0 }, { 1, 0 }, { 0, 1 }, { 0, -1 }, { -1, 1 }, { 1, 1 }, { -1, -1 }, { 1, -1 } }
-local function CreateShiningWord(parent, fontObject, size)
-	local word = CreateText(parent, fontObject, size)
+local function CreateShiningWord(parent, fontObject)
+	local word = CreateText(parent, fontObject)
 	word:SetText(T.forever)
 	word:SetTextColor(WHITE.r, WHITE.g, WHITE.b)
 	local glow = {}
 	for i, offset in ipairs(GLOW_OFFSETS) do
-		local copy = CreateText(parent, fontObject, size, "BACKGROUND")
+		local copy = CreateText(parent, fontObject, "BACKGROUND")
 		copy:SetText(T.forever)
 		copy:SetTextColor(GLOW[1], GLOW[2], GLOW[3])
 		copy:SetShadowOffset(0, 0)
@@ -210,46 +207,59 @@ local function CreateShiningWord(parent, fontObject, size)
 end
 
 -- The countdown: days, hours, minutes and seconds in the game's heavy number font, white with
--- gold colons that stay still. Each figure sits in a box as wide as the widest figure, so the
--- clock doesn't jiggle as its figures change. The seconds fade in as they tick (see Animate).
-local function CreateClock(parent, size)
+-- gold colons that stay still, as tall as the tracker's header text (see Relayout). Each figure
+-- sits in a box as wide as the widest figure, so the clock doesn't jiggle as its figures change.
+-- The seconds fade in as they tick (see Animate).
+local function CreateClock(parent)
 	local numberFont = Font("NumberFont_Outline_Huge", "GameFontHighlightLarge")
+	local file = numberFont:GetFont()
 	local clock = CreateFrame("Frame", nil, parent)
-	local measure = CreateText(clock, numberFont, size)
-	measure:SetFont(measure:GetFont(), size, "")
-	local figure = 0
-	for digit = 0, 9 do
-		measure:SetText(tostring(digit))
-		figure = math.max(figure, measure:GetUnboundedStringWidth())
-	end
-	measure:SetText(":")
-	local colonWidth = measure:GetUnboundedStringWidth() + 2
+	local measure = CreateText(clock, numberFont)
 	measure:Hide()
-	local cells, x = {}, 0
-	local function Cell(width)
-		local text = CreateText(clock, numberFont, size)
-		text:SetFont(text:GetFont(), size, "")
-		text:SetJustifyH("CENTER")
-		text:SetWidth(width)
-		text:SetPoint("LEFT", x, 0)
-		x = x + width
-		return text
-	end
+	local cells, colons = {}, {}
 	for group = 1, 4 do
 		for _ = 1, 2 do
-			local cell = Cell(math.ceil(figure))
+			local cell = CreateText(clock, numberFont)
+			cell:SetJustifyH("CENTER")
 			cell:SetTextColor(WHITE.r, WHITE.g, WHITE.b)
 			cells[#cells + 1] = cell
 		end
 		if group < 4 then
-			local colon = Cell(colonWidth)
+			local colon = CreateText(clock, numberFont)
+			colon:SetJustifyH("CENTER")
 			colon:SetText(":")
 			colon:SetTextColor(GOLD.r, GOLD.g, GOLD.b)
+			colons[#colons + 1] = colon
 		end
 	end
-	clock:SetSize(x, size + 4)
 	clock.cells = cells
 	clock.tickedAt = 0
+	function clock:Resize(size)
+		measure:SetFont(file, size, "")
+		local figure = 0
+		for digit = 0, 9 do
+			measure:SetText(tostring(digit))
+			figure = math.max(figure, measure:GetUnboundedStringWidth())
+		end
+		measure:SetText(":")
+		local colonWidth = measure:GetUnboundedStringWidth() + 2
+		figure = math.ceil(figure)
+		local x = 0
+		for i, cell in ipairs(cells) do
+			cell:SetFont(file, size, "")
+			cell:SetWidth(figure)
+			cell:SetPoint("LEFT", x, 0)
+			x = x + figure
+			if i % 2 == 0 and colons[i / 2] then
+				local colon = colons[i / 2]
+				colon:SetFont(file, size, "")
+				colon:SetWidth(colonWidth)
+				colon:SetPoint("LEFT", x, 0)
+				x = x + colonWidth
+			end
+		end
+		self:SetSize(x, size + 4)
+	end
 	function clock:Set(days, hours, minutes, seconds)
 		local text = string.format("%02d%02d%02d%02d", math.min(days, 99), hours, minutes, seconds)
 		for i = 1, 8 do
@@ -269,7 +279,8 @@ local panel
 local saved
 local rows = {}
 local shining = {}
-local quill, infinity, turnInMarker
+local quill, infinity, turnInMarker, turnInWiggle
+local headerFont, lineFont -- the tracker's own font objects
 local launchRest -- "launches" after the shining "Forever" in the launch row
 local launchWordText, miniWordText -- the two "Forever"s the width is measured from
 local fullClock, miniClock
@@ -308,18 +319,21 @@ end
 -- A milestone: a marker on the left, a title in gold and a line under it, as a quest shows in
 -- the tracker; greyed once it is behind. The titles use the game's bright gold (the tracker's
 -- highlight color): its resting header gold read too dim in game (the user, 0.1.1).
-local function CreateRow(parent, index, lineFont)
+-- Each milestone sits under the one above it, so the rows follow the text's height.
+local function CreateRow(parent, above)
 	local row = CreateFrame("Frame", nil, parent)
-	row:SetPoint("TOPLEFT", 0, -HEADER_HEIGHT - ROW_TOP_GAP - (index - 1) * ROW_STEP)
-	row:SetPoint("RIGHT")
-	row:SetHeight(ROW_STEP)
+	row:SetAllPoints()
+	row.title = CreateText(row, lineFont)
+	if above then
+		row.title:SetPoint("TOPLEFT", above.line, "BOTTOMLEFT", 0, -ROW_GAP)
+	else
+		row.title:SetPoint("TOPLEFT", HEADER_TEXT_X + ICON_COLUMN + ICON_GAP, -HEADER_HEIGHT - ROW_TOP_GAP)
+	end
+	row.line = CreateText(row, lineFont)
+	row.line:SetPoint("TOPLEFT", row.title, "BOTTOMLEFT", 0, -LINE_GAP)
 	row.icon = CreateFrame("Frame", nil, row)
 	row.icon:SetSize(ICON_COLUMN, ICON_COLUMN)
-	row.icon:SetPoint("TOPLEFT", HEADER_TEXT_X, 3)
-	row.title = CreateText(row, lineFont, LINE_FONT_SIZE)
-	row.title:SetPoint("TOPLEFT", HEADER_TEXT_X + ICON_COLUMN + ICON_GAP, 0)
-	row.line = CreateText(row, lineFont, LINE_FONT_SIZE)
-	row.line:SetPoint("TOPLEFT", row.title, "BOTTOMLEFT", 0, -2)
+	row.icon:SetPoint("CENTER", row.title, "LEFT", -ICON_GAP - ICON_COLUMN / 2, 0)
 	return row
 end
 
@@ -354,6 +368,11 @@ local function Refresh()
 	SetRow(rows[2], lines.betaEnds.title, lines.betaEnds.line, lines.betaEnds.done)
 	SetRow(rows[3], lines.reservation.title, lines.reservation.line, lines.reservation.done)
 	turnInMarker:SetDesaturated(lines.betaEnds.done)
+	if lines.betaEnds.done then
+		turnInWiggle:Stop()
+	elseif not turnInWiggle:IsPlaying() then
+		turnInWiggle:Play()
+	end
 	local launchRow = rows[4]
 	launchRow.line:SetText(QUEST_DASH .. ns.LaunchText(GetCVarBool("timeMgrUseMilitaryTime")))
 	local days, hours, minutes, seconds = ns.ClockParts(now)
@@ -380,17 +399,14 @@ local function SetMinimized(minimized)
 	local art = minimized and EXPAND_ART or COLLAPSE_ART
 	panel.button:GetNormalTexture():SetAtlas(art)
 	panel.button:GetPushedTexture():SetAtlas(art .. "-Pressed")
-	panel:SetHeight(minimized and HEADER_HEIGHT or (HEADER_HEIGHT + ROW_TOP_GAP + 4 * ROW_STEP))
+	panel:SetHeight(minimized and HEADER_HEIGHT or panel.openHeight or HEADER_HEIGHT)
 end
 
 -- Animation ----------------------------------------------------------------------------------
 
 -- One driver for every moving part, run each frame while the panel is shown (the game skips
--- OnUpdate for hidden frames): the texts once a second, the seconds' tick, the "?" that
--- shakes for attention, the quill writing, the light around the infinity sign and the
+-- OnUpdate for hidden frames): the texts once a second, the seconds' tick, the quill writing, the light around the infinity sign and the
 -- glow of "Forever".
-local SHAKE = { -16, 14, -11, 8, -4, 0 } -- degrees, one step every 0.04 s, then a rest
-local SHAKE_PERIOD = 3.2
 local QUILL_PERIOD = 2.4
 -- Where the pen is over one writing stroke: share of the period, then x right and y up, in UI
 -- units from its rest position.
@@ -424,9 +440,6 @@ local function Animate()
 	if not panel.body:IsShown() then
 		return
 	end
-	-- "?": a quick shake from side to side, then a rest, for attention.
-	local step = math.floor((time % SHAKE_PERIOD) / 0.04) + 1
-	turnInMarker:SetRotation(math.rad(SHAKE[step] or 0))
 	-- The quill writes a line, lifts, and the ink fades before the next one.
 	local phase = (time % QUILL_PERIOD) / QUILL_PERIOD
 	for i = 1, #PEN_PATH - 1 do
@@ -466,10 +479,62 @@ local function SafeAnimate()
 	end
 end
 
+-- The "?" wiggles from side to side on its base, then rests: a quest waiting to be handed in,
+-- asking for attention. Built in plain Lua (an animation group made from an XML template gets
+-- no mixin in Forever).
+local WIGGLE = { -18, 34, -30, 24, -16, 6 } -- degrees, each from where the last one ended
+local WIGGLE_STEP = 0.06
+local WIGGLE_REST = 2.6
+local function CreateWiggle(texture)
+	local group = texture:CreateAnimationGroup()
+	group:SetLooping("REPEAT")
+	for i, degrees in ipairs(WIGGLE) do
+		local turn = group:CreateAnimation("Rotation")
+		turn:SetDegrees(degrees)
+		turn:SetDuration(WIGGLE_STEP)
+		turn:SetOrigin("BOTTOM", 0, 0)
+		turn:SetOrder(i)
+		if i == 1 then
+			turn:SetStartDelay(WIGGLE_REST)
+		end
+	end
+	return group
+end
+
+-- Sizes that follow the tracker's text: the clocks are as tall as its header text, the panel
+-- as wide as its longest line and as tall as its rows. Runs once built and again whenever the
+-- tracker's Text Size setting changes.
+local function Relayout()
+	local headerSize = select(2, headerFont:GetFont())
+	fullClock:Resize(headerSize)
+	miniClock:Resize(headerSize)
+	FitWidth()
+	local height = HEADER_HEIGHT + ROW_TOP_GAP
+	for i, row in ipairs(rows) do
+		local titleHeight = row.title:GetStringHeight()
+		if i == 4 then
+			titleHeight = math.max(launchWordText:GetStringHeight(), fullClock:GetHeight())
+		end
+		height = height + titleHeight + LINE_GAP + row.line:GetStringHeight() + (i < #rows and ROW_GAP or 4)
+	end
+	panel.openHeight = math.ceil(height)
+	SetMinimized(saved.minimized)
+end
+
+local function SafeRelayout()
+	if stopped then
+		return
+	end
+	if not xpcall(Relayout, CallErrorHandler) then
+		stopped = true
+		panel:SetScript("OnUpdate", nil)
+		SayProblem("the countdown stopped.", "Type /reload to start it again.")
+	end
+end
+
 local function Build()
-	local headerFont = Font("ObjectiveTrackerHeaderFont", "GameFontNormalMed2")
-	local lineFont = Font("ObjectiveTrackerLineFont", "GameFontHighlight")
-	local headerSize = select(2, headerFont:GetFont()) or HEADER_FONT_SIZE
+	headerFont = Font("ObjectiveTrackerHeaderFont", "GameFontNormalMed2")
+	lineFont = Font("ObjectiveTrackerLineFont", "GameFontHighlight")
 
 	panel = CreateFrame("Frame", nil, UIParent)
 	panel:SetSize(HEADER_WIDTH, HEADER_HEIGHT)
@@ -498,14 +563,14 @@ local function Build()
 	art:SetAtlas(HEADER_ART, true)
 	art:SetPoint("CENTER")
 
-	-- Open: "Countdown to" in gold, then the shining "Forever".
+	-- Open: "Countdown to" in gold, then the shining "Forever", in the tracker's header font.
 	local full = CreateFrame("Frame", nil, header)
 	full:SetAllPoints()
-	local countdownTo = CreateText(full, headerFont, headerSize * SMALL_TEXT)
+	local countdownTo = CreateText(full, headerFont)
 	countdownTo:SetText(T.countdownTo)
 	countdownTo:SetTextColor(GOLD.r, GOLD.g, GOLD.b)
 	countdownTo:SetPoint("LEFT", HEADER_TEXT_X, 0)
-	local fullWord = CreateShiningWord(full, headerFont, headerSize)
+	local fullWord = CreateShiningWord(full, headerFont)
 	fullWord.word:SetPoint("LEFT", countdownTo, "RIGHT", 4, 0)
 	shining[#shining + 1] = fullWord
 	panel.full = full
@@ -513,15 +578,15 @@ local function Build()
 	-- Minimized: the shining "Forever", "launches in" in gold, and the clock.
 	local mini = CreateFrame("Frame", nil, header)
 	mini:SetAllPoints()
-	local miniWord = CreateShiningWord(mini, headerFont, headerSize)
+	local miniWord = CreateShiningWord(mini, headerFont)
 	miniWord.word:SetPoint("LEFT", HEADER_TEXT_X, 0)
 	shining[#shining + 1] = miniWord
 	miniWordText = miniWord.word
-	local miniRest = CreateText(mini, headerFont, headerSize * SMALL_TEXT)
+	local miniRest = CreateText(mini, headerFont)
 	miniRest:SetTextColor(GOLD.r, GOLD.g, GOLD.b)
 	miniRest:SetPoint("LEFT", miniWord.word, "RIGHT", 4, 0)
 	panel.miniRest = miniRest
-	miniClock = CreateClock(mini, MINI_CLOCK_SIZE)
+	miniClock = CreateClock(mini)
 	miniClock:SetPoint("LEFT", miniRest, "RIGHT", 8, 0)
 	panel.mini = mini
 
@@ -536,38 +601,46 @@ local function Build()
 	end)
 	panel.button = button
 
-	-- The milestones.
+	-- The milestones, in the tracker's line font.
 	local body = CreateFrame("Frame", nil, panel)
 	body:SetAllPoints()
 	panel.body = body
 	for i = 1, 4 do
-		rows[i] = CreateRow(body, i, lineFont)
+		rows[i] = CreateRow(body, rows[i - 1])
 	end
 	Marker(rows[1], QUEST_AVAILABLE_ART, 20, true)
 	turnInMarker = Marker(rows[2], QUEST_TURN_IN_ART, 16)
+	turnInWiggle = CreateWiggle(turnInMarker)
 	quill = CreateQuill(rows[3].icon, 15)
 	quill:SetPoint("CENTER", 0, 1)
-	infinity = CreateInfinity(rows[4].icon, INFINITY_WIDTH)
-	infinity:SetPoint("CENTER", 2, 0)
 
 	-- "Forever launches", with the clock beside it. Its title is two texts, the shining
 	-- "Forever" and "launches", so the row's own title stays empty.
 	local launchRow = rows[4]
-	local launchWord = CreateShiningWord(launchRow, lineFont, LINE_FONT_SIZE)
+	local launchWord = CreateShiningWord(launchRow, lineFont)
 	launchWord.word:SetPoint("TOPLEFT", launchRow.title)
 	shining[#shining + 1] = launchWord
 	launchWordText = launchWord.word
-	launchRest = CreateText(launchRow, lineFont, LINE_FONT_SIZE)
+	launchRest = CreateText(launchRow, lineFont)
 	launchRest:SetTextColor(GOLD.r, GOLD.g, GOLD.b)
 	launchRest:SetPoint("LEFT", launchWord.word, "RIGHT", 4, 0)
-	fullClock = CreateClock(launchRow, CLOCK_SIZE)
+	fullClock = CreateClock(launchRow)
 	fullClock:SetPoint("LEFT", launchRest, "RIGHT", CLOCK_GAP, 0)
 	launchRow.line:ClearAllPoints()
-	launchRow.line:SetPoint("TOPLEFT", launchWord.word, "BOTTOMLEFT", 0, -2)
+	launchRow.line:SetPoint("TOPLEFT", launchWord.word, "BOTTOMLEFT", 0, -LINE_GAP)
+	launchRow.icon:ClearAllPoints()
+	launchRow.icon:SetPoint("CENTER", launchWord.word, "LEFT", -ICON_GAP - ICON_COLUMN / 2, 0)
+	infinity = CreateInfinity(launchRow.icon, INFINITY_WIDTH)
+	infinity:SetPoint("CENTER", 2, 0)
 
-	SetMinimized(saved.minimized)
 	Refresh()
-	FitWidth()
+	Relayout()
+	if ObjectiveTrackerManager and ObjectiveTrackerManager.SetTextSize then
+		hooksecurefunc(ObjectiveTrackerManager, "SetTextSize", function()
+			-- The game has swapped the fonts; measure them on the next frame.
+			C_Timer.After(0, SafeRelayout)
+		end)
+	end
 	panel:SetScript("OnUpdate", SafeAnimate)
 end
 

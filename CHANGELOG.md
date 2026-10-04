@@ -1,3 +1,8 @@
+## v0.1.2
+
+- Text is the same size as the quest tracker's, and follows its Text Size setting in Edit Mode.
+- The "?" wiggles.
+
 ## v0.1.1
 
 - The panel is wide enough for the clock beside "Forever launches", and keeps its width when minimized.
