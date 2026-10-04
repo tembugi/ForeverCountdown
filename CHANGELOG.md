@@ -1,3 +1,7 @@
+## v0.1.6
+
+- The clock's figures and colons are evenly spaced, larger and easier to read.
+
 ## v0.1.5
 
 - The clock is compact, bold and a little larger.

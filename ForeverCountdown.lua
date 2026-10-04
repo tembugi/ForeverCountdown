@@ -4,7 +4,7 @@
 local ADDON_NAME, ns = ...
 
 -- Keep equal to ## Version in the .toc.
-local VERSION = "0.1.5"
+local VERSION = "0.1.6"
 ns.VERSION = VERSION
 -- The addon's name as the player sees it: the start of chat lines.
 local ADDON_TITLE = "Forever Countdown"
@@ -34,7 +34,7 @@ local ICON_COLUMN = 20
 local ICON_GAP = 6
 local CLOCK_GAP = 15 -- "launches" to the clock
 local INFINITY_WIDTH = 24
-local CLOCK_EXTRA = 2 -- the clock's size over the header text's
+local CLOCK_EXTRA = 3 -- the clock figures' size over the header text's
 
 -- Colors: the tracker's own when it is loaded, else Blizzard's usual values.
 local function TrackerColor(key, r, g, b)
@@ -240,36 +240,65 @@ local function CreateShiningWord(parent, fontObject)
 end
 
 -- The countdown: days, hours, minutes and seconds in bold white (the tracker's header font with
--- a black outline, a little larger than the header text, see Relayout), with gold colons that
--- stay still. The seconds are a text of their own, so they fade in as they tick (see Animate).
+-- a black outline, a few sizes larger than the header text, see Relayout), with larger gold
+-- colons that stay still. Each pair of figures and each colon is a text of its own, laid out
+-- with the same gap everywhere: as one text the figures and colons sat unevenly, and the
+-- colons were too small to read (0.1.5). The seconds fade in as they tick (see Animate).
 -- A text out of sight is never measured: the game answered with the font's default size, which
 -- spread the figures apart (0.1.4).
 local CLOCK_FLAGS = "OUTLINE"
+local CLOCK_GAP_INNER = 2 -- between a pair of figures and a colon
+local COLON_EXTRA = 4 -- the colons' size over the figures'
 local function CreateClock(parent, fontObject)
 	local file = fontObject:GetFont()
-	local colon = GOLD:WrapTextInColorCode(":")
 	local clock = CreateFrame("Frame", nil, parent)
-	local main = CreateText(clock, fontObject)
-	main:SetTextColor(WHITE.r, WHITE.g, WHITE.b)
-	main:SetPoint("LEFT")
-	local seconds = CreateText(clock, fontObject)
-	seconds:SetTextColor(WHITE.r, WHITE.g, WHITE.b)
-	seconds:SetPoint("LEFT", main, "RIGHT")
-	clock.secondsText = seconds
+	local figurePairs, colons = {}, {}
+	for i = 1, 4 do
+		local pair = CreateText(clock, fontObject)
+		pair:SetJustifyH("CENTER")
+		pair:SetTextColor(WHITE.r, WHITE.g, WHITE.b)
+		figurePairs[i] = pair
+		if i < 4 then
+			local colon = CreateText(clock, fontObject)
+			colon:SetJustifyH("CENTER")
+			colon:SetText(":")
+			colon:SetTextColor(GOLD.r, GOLD.g, GOLD.b)
+			colons[i] = colon
+		end
+	end
+	clock.secondsText = figurePairs[4]
 	clock.tickedAt = 0
 	function clock:Resize(size)
-		main:SetFont(file, size, CLOCK_FLAGS)
-		seconds:SetFont(file, size, CLOCK_FLAGS)
-		local mainText, secondsText = main:GetText(), seconds:GetText()
-		main:SetText("00" .. colon .. "00" .. colon .. "00" .. colon)
-		seconds:SetText("00")
-		self:SetSize(math.ceil(main:GetUnboundedStringWidth() + seconds:GetUnboundedStringWidth()), size + 4)
-		main:SetText(mainText)
-		seconds:SetText(secondsText)
+		local shown = figurePairs[1]:GetText()
+		for i, pair in ipairs(figurePairs) do
+			pair:SetFont(file, size, CLOCK_FLAGS)
+			if colons[i] then
+				colons[i]:SetFont(file, size + COLON_EXTRA, CLOCK_FLAGS)
+			end
+		end
+		figurePairs[1]:SetText("00")
+		local pairWidth = math.ceil(figurePairs[1]:GetUnboundedStringWidth())
+		local colonWidth = math.ceil(colons[1]:GetUnboundedStringWidth())
+		figurePairs[1]:SetText(shown)
+		local x = 0
+		for i, pair in ipairs(figurePairs) do
+			pair:SetWidth(pairWidth)
+			pair:SetPoint("LEFT", x, 0)
+			x = x + pairWidth
+			if colons[i] then
+				x = x + CLOCK_GAP_INNER
+				colons[i]:SetWidth(colonWidth)
+				colons[i]:SetPoint("LEFT", x, 1)
+				x = x + colonWidth + CLOCK_GAP_INNER
+			end
+		end
+		self:SetSize(x, size + COLON_EXTRA + 4)
 	end
 	function clock:Set(days, hours, minutes, secs)
-		main:SetText(string.format("%02d%s%02d%s%02d%s", math.min(days, 99), colon, hours, colon, minutes, colon))
-		seconds:SetText(string.format("%02d", secs))
+		figurePairs[1]:SetText(string.format("%02d", math.min(days, 99)))
+		figurePairs[2]:SetText(string.format("%02d", hours))
+		figurePairs[3]:SetText(string.format("%02d", minutes))
+		figurePairs[4]:SetText(string.format("%02d", secs))
 		if secs ~= self.seconds then
 			self.seconds = secs
 			self.tickedAt = GetTime()
@@ -398,7 +427,7 @@ end
 local function SetMinimized(minimized)
 	saved.minimized = minimized
 	panel.body:SetAlpha(minimized and 0 or 1)
-	panel.mini:SetShown(minimized)
+	panel.mini:SetAlpha(minimized and 1 or 0)
 	local art = minimized and EXPAND_ART or COLLAPSE_ART
 	panel.button:GetNormalTexture():SetAtlas(art)
 	panel.button:GetPushedTexture():SetAtlas(art .. "-Pressed")
@@ -629,6 +658,8 @@ local function Build()
 
 	Refresh()
 	Relayout()
+	-- Measure again on the next frame, once the game has laid the new texts out.
+	C_Timer.After(0, SafeRelayout)
 	if ObjectiveTrackerManager and ObjectiveTrackerManager.SetTextSize then
 		hooksecurefunc(ObjectiveTrackerManager, "SetTextSize", function()
 			-- The game has swapped the fonts; measure them on the next frame.
