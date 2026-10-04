@@ -4,7 +4,7 @@
 local ADDON_NAME, ns = ...
 
 -- Keep equal to ## Version in the .toc.
-local VERSION = "0.1.0"
+local VERSION = "0.1.1"
 ns.VERSION = VERSION
 -- The addon's name as the player sees it: the start of chat lines.
 local ADDON_TITLE = "Forever Countdown"
@@ -188,11 +188,10 @@ local function CreateQuill(parent, size)
 	return frame
 end
 
--- "Forever" in white, the way the logo has it: a soft pale-blue glow that rises and fades, and
--- a gleam that sweeps across the word every few seconds (see Animate). The game's text
--- outlines are always black, so the glow is the word again in pale blue, a pixel out in each
--- direction, behind it. The game can't light the inside of letters either, so the gleam lights
--- the word's box: the letters and the gaps between them.
+-- "Forever" in white, the way the logo has it, with a soft pale-blue glow that rises and fades
+-- (see Animate). The game's text outlines are always black, so the glow is the word again in
+-- pale blue, a pixel out in each direction, behind it. (A gleam sweeping across the word was
+-- tried in 0.1.0 and dropped by the user.)
 local GLOW_OFFSETS = { { -1, 0 }, { 1, 0 }, { 0, 1 }, { 0, -1 }, { -1, 1 }, { 1, 1 }, { -1, -1 }, { 1, -1 } }
 local function CreateShiningWord(parent, fontObject, size)
 	local word = CreateText(parent, fontObject, size)
@@ -207,26 +206,7 @@ local function CreateShiningWord(parent, fontObject, size)
 		copy:SetPoint("CENTER", word, "CENTER", offset[1], offset[2])
 		glow[i] = copy
 	end
-	local clip = CreateFrame("Frame", nil, parent)
-	clip:SetPoint("TOPLEFT", word, -2, 2)
-	clip:SetPoint("BOTTOMRIGHT", word, 2, -2)
-	clip:SetClipsChildren(true)
-	local gleam = CreateFrame("Frame", nil, clip)
-	gleam:SetSize(12, size + 8)
-	gleam:SetPoint("LEFT")
-	local left = gleam:CreateTexture(nil, "OVERLAY")
-	left:SetColorTexture(1, 1, 1, 1)
-	left:SetBlendMode("ADD")
-	left:SetPoint("TOPLEFT")
-	left:SetPoint("BOTTOMRIGHT", gleam, "BOTTOM")
-	left:SetGradient("HORIZONTAL", CreateColor(1, 1, 1, 0), CreateColor(1, 1, 1, 0.55))
-	local right = gleam:CreateTexture(nil, "OVERLAY")
-	right:SetColorTexture(1, 1, 1, 1)
-	right:SetBlendMode("ADD")
-	right:SetPoint("TOPLEFT", gleam, "TOP")
-	right:SetPoint("BOTTOMRIGHT")
-	right:SetGradient("HORIZONTAL", CreateColor(1, 1, 1, 0.55), CreateColor(1, 1, 1, 0))
-	return { word = word, glow = glow, clip = clip, gleam = gleam }
+	return { word = word, glow = glow }
 end
 
 -- The countdown: days, hours, minutes and seconds in the game's heavy number font, white with
@@ -291,18 +271,19 @@ local rows = {}
 local shining = {}
 local quill, infinity, turnInMarker
 local launchRest -- "launches" after the shining "Forever" in the launch row
+local launchWordText, miniWordText -- the two "Forever"s the width is measured from
 local fullClock, miniClock
 
-local function Measure()
-	local width = HEADER_WIDTH
-	local tracker = ObjectiveTrackerFrame
-	if tracker and tracker.GetWidth then
-		local trackerWidth = tracker:GetWidth()
-		if trackerWidth and trackerWidth > 100 then
-			width = trackerWidth
-		end
-	end
-	return width
+-- The panel is at least as wide as a tracker section, and wide enough for its longest line:
+-- "Forever launches" with the clock beside it, or the minimized header with its clock and the
+-- button. The width is the same open and minimized (the user asked, 0.1.1).
+local RIGHT_MARGIN = 8
+local function FitWidth()
+	local launchLine = HEADER_TEXT_X + ICON_COLUMN + ICON_GAP + launchWordText:GetStringWidth() + 4
+		+ launchRest:GetStringWidth() + CLOCK_GAP + fullClock:GetWidth() + RIGHT_MARGIN
+	local miniLine = HEADER_TEXT_X + miniWordText:GetStringWidth() + 4 + panel.miniRest:GetStringWidth() + 8
+		+ miniClock:GetWidth() + BUTTON_SIZE + RIGHT_MARGIN
+	panel:SetWidth(math.ceil(math.max(HEADER_WIDTH, launchLine, miniLine)))
 end
 
 local function SavePosition()
@@ -324,8 +305,9 @@ local function PlacePanel()
 	end
 end
 
--- A milestone: a marker on the left, a title in the tracker's header color and a line under
--- it, as a quest shows in the tracker; greyed once it is behind.
+-- A milestone: a marker on the left, a title in gold and a line under it, as a quest shows in
+-- the tracker; greyed once it is behind. The titles use the game's bright gold (the tracker's
+-- highlight color): its resting header gold read too dim in game (the user, 0.1.1).
 local function CreateRow(parent, index, lineFont)
 	local row = CreateFrame("Frame", nil, parent)
 	row:SetPoint("TOPLEFT", 0, -HEADER_HEIGHT - ROW_TOP_GAP - (index - 1) * ROW_STEP)
@@ -348,7 +330,7 @@ local function SetRow(row, title, line, done)
 		row.title:SetTextColor(TrackerColor("Complete", 0.6, 0.6, 0.6))
 		row.line:SetTextColor(TrackerColor("Complete", 0.6, 0.6, 0.6))
 	else
-		row.title:SetTextColor(TrackerColor("Header", 1, 0.82, 0))
+		row.title:SetTextColor(GOLD.r, GOLD.g, GOLD.b)
 		row.line:SetTextColor(TrackerColor("Normal", 0.8, 0.8, 0.8))
 	end
 end
@@ -406,7 +388,7 @@ end
 -- One driver for every moving part, run each frame while the panel is shown (the game skips
 -- OnUpdate for hidden frames): the texts once a second, the seconds' tick, the "?" that
 -- shakes for attention, the quill writing, the light around the infinity sign and the
--- shining "Forever".
+-- glow of "Forever".
 local SHAKE = { -16, 14, -11, 8, -4, 0 } -- degrees, one step every 0.04 s, then a rest
 local SHAKE_PERIOD = 3.2
 local QUILL_PERIOD = 2.4
@@ -415,8 +397,6 @@ local QUILL_PERIOD = 2.4
 local PEN_PATH = { { 0, -1, 0 }, { 0.1, 0.5, 1 }, { 0.2, 2, 0 }, { 0.3, 3.5, 1 }, { 0.4, 5, 0 }, { 0.55, 7, 0.5 }, { 0.7, 7, 3 }, { 1, -1, 0 } }
 local TRACE_PERIOD = 4
 local GLOW_PERIOD = 3.6
-local GLEAM_PERIOD = 3.6
-local GLEAM_SWEEP = 0.6 -- share of the period the sweep takes; the rest is a pause
 
 local lastSecond
 local function Animate()
@@ -432,20 +412,12 @@ local function Animate()
 		clock.cells[7]:SetAlpha(0.3 + 0.7 * fade)
 		clock.cells[8]:SetAlpha(0.3 + 0.7 * fade)
 	end
-	-- "Forever": the glow rises and fades; the gleam sweeps, then rests.
+	-- "Forever": the glow rises and fades.
 	local glowAlpha = 0.25 + 0.35 * (0.5 - 0.5 * math.cos(2 * math.pi * (time % GLOW_PERIOD) / GLOW_PERIOD))
-	local sweep = ((time % GLEAM_PERIOD) / GLEAM_PERIOD - (1 - GLEAM_SWEEP)) / GLEAM_SWEEP
 	for _, shine in ipairs(shining) do
 		if shine.word:IsVisible() then
 			for _, copy in ipairs(shine.glow) do
 				copy:SetAlpha(glowAlpha * 0.6)
-			end
-			local width = shine.clip:GetWidth()
-			if sweep >= 0 then
-				shine.gleam:SetPoint("LEFT", shine.clip, "LEFT", -12 + (width + 12) * sweep, 0)
-				shine.gleam:Show()
-			else
-				shine.gleam:Hide()
 			end
 		end
 	end
@@ -500,7 +472,7 @@ local function Build()
 	local headerSize = select(2, headerFont:GetFont()) or HEADER_FONT_SIZE
 
 	panel = CreateFrame("Frame", nil, UIParent)
-	panel:SetSize(Measure(), HEADER_HEIGHT)
+	panel:SetSize(HEADER_WIDTH, HEADER_HEIGHT)
 	panel:SetMovable(true)
 	panel:SetClampedToScreen(true)
 	panel:SetDontSavePosition(true)
@@ -544,6 +516,7 @@ local function Build()
 	local miniWord = CreateShiningWord(mini, headerFont, headerSize)
 	miniWord.word:SetPoint("LEFT", HEADER_TEXT_X, 0)
 	shining[#shining + 1] = miniWord
+	miniWordText = miniWord.word
 	local miniRest = CreateText(mini, headerFont, headerSize * SMALL_TEXT)
 	miniRest:SetTextColor(GOLD.r, GOLD.g, GOLD.b)
 	miniRest:SetPoint("LEFT", miniWord.word, "RIGHT", 4, 0)
@@ -583,8 +556,9 @@ local function Build()
 	local launchWord = CreateShiningWord(launchRow, lineFont, LINE_FONT_SIZE)
 	launchWord.word:SetPoint("TOPLEFT", launchRow.title)
 	shining[#shining + 1] = launchWord
+	launchWordText = launchWord.word
 	launchRest = CreateText(launchRow, lineFont, LINE_FONT_SIZE)
-	launchRest:SetTextColor(TrackerColor("Header", 1, 0.82, 0))
+	launchRest:SetTextColor(GOLD.r, GOLD.g, GOLD.b)
 	launchRest:SetPoint("LEFT", launchWord.word, "RIGHT", 4, 0)
 	fullClock = CreateClock(launchRow, CLOCK_SIZE)
 	fullClock:SetPoint("LEFT", launchRest, "RIGHT", CLOCK_GAP, 0)
@@ -593,6 +567,7 @@ local function Build()
 
 	SetMinimized(saved.minimized)
 	Refresh()
+	FitWidth()
 	panel:SetScript("OnUpdate", SafeAnimate)
 end
 

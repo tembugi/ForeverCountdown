@@ -17,10 +17,10 @@ From Blizzard's announcements, in `Countdown.lua`. Blizzard gave times of day on
 ## Look
 
 The tracker's own pieces, read from the game while it runs, with Blizzard's values (from `ObjectiveTrackerModuleHeaderTemplate`) only as fallbacks:
-- Width: the objective tracker's (`ObjectiveTrackerFrame`), else 260. The header is 26 tall with `UI-QuestTracker-Secondary-Objective-Header` art and the section minimize button (`UI-QuestTrackerButton-Secondary-Collapse`/`-Expand`, yellow highlight).
-- Fonts: `ObjectiveTrackerHeaderFont` for the header and `ObjectiveTrackerLineFont` for the lines; colors from `OBJECTIVE_TRACKER_COLOR` (Header for titles, Normal for lines, Complete for what is behind).
+- Width: at least a tracker section's 260, and wide enough for the longest line ("Forever launches" with the clock beside it, or the minimized header with its clock and button), measured from the texts once they are made. The same width open and minimized (the user asked, 0.1.1). The header is 26 tall with `UI-QuestTracker-Secondary-Objective-Header` art and the section minimize button (`UI-QuestTrackerButton-Secondary-Collapse`/`-Expand`, yellow highlight).
+- Fonts: `ObjectiveTrackerHeaderFont` for the header and `ObjectiveTrackerLineFont` for the lines; colors from `OBJECTIVE_TRACKER_COLOR` (Normal for lines, Complete for what is behind). Titles and the header's gold words use the game's bright gold, `NORMAL_FONT_COLOR` (the tracker's highlight gold): its resting Header gold read too dim in game (the user, 0.1.1).
 - The header reads "Countdown to" (gold, 0.9 of the header font) then "Forever".
-- Every "Forever" is white and shines: a pale-blue glow that rises and fades (the word in pale blue a pixel out in eight directions behind it; the game's outlines are always black) and a gleam sweeping across it. The game can't light the inside of letters, so the gleam lights the word's box.
+- Every "Forever" is white with a pale-blue glow that rises and fades (the word in pale blue a pixel out in eight directions behind it; the game's outlines are always black). A gleam sweeping across the word was dropped after the user saw it in game (0.1.1).
 - Rows, as quests show in the tracker: a marker on the left, a title, and a dashed line under it (`QUEST_DASH`). What is behind is greyed (Complete).
   - "!" (the game's `QuestNormal` art), greyed and still: Beta began.
   - "?" (`QuestTurnin`): Beta ends. It shakes from side to side for attention, then rests (the user asked for a shake, not a bounce).
