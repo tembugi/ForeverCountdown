@@ -4,7 +4,7 @@
 local ADDON_NAME, ns = ...
 
 -- Keep equal to ## Version in the .toc.
-local VERSION = "0.1.13"
+local VERSION = "0.1.14"
 ns.VERSION = VERSION
 -- The addon's name as the player sees it: the start of chat lines.
 local ADDON_TITLE = "Forever Countdown"
@@ -35,10 +35,6 @@ local ICON_GAP = 6
 local CLOCK_GAP = 15 -- "launches" to the clock
 local INFINITY_WIDTH = 24
 local CLOCK_EXTRA = 3 -- the clock figures' size over the header text's
--- How far a larger text, centered on a smaller one, is lowered so their tops meet, per unit of
--- size difference, for the tracker's font (measured from a screenshot in game: centered, the
--- clock's figures stood 2.7 units above the letters' tops at 5 sizes larger, 0.1.7).
-local TOP_ALIGN_DROP = 0.53
 
 -- Colors: the tracker's own when it is loaded, else Blizzard's usual values.
 local function TrackerColor(key, r, g, b)
@@ -549,15 +545,14 @@ end
 -- tracker's Text Size setting changes.
 local function Relayout()
 	local headerSize = select(2, headerFont:GetFont())
-	local lineSize = select(2, lineFont:GetFont())
 	local clockSize = headerSize + CLOCK_EXTRA
 	fullClock:Resize(clockSize)
 	miniClock:Resize(clockSize)
-	-- The clock is larger than the text beside it. In the launch row its top lines up with the
-	-- text's top (the user's choice, 0.1.9): lowered from centered by a share of the size
-	-- difference. In the minimized header it stays centered on the title (0.1.10).
+	-- The clock is larger than the text beside it and centered on it, in the launch row as in the
+	-- minimized header (the user's choice, 0.1.14, after trying a shared baseline in 0.1.8 and
+	-- aligned tops in 0.1.9).
 	fullClock:ClearAllPoints()
-	fullClock:SetPoint("LEFT", launchRest, "RIGHT", CLOCK_GAP, -(clockSize - lineSize) * TOP_ALIGN_DROP)
+	fullClock:SetPoint("LEFT", launchRest, "RIGHT", CLOCK_GAP, 0)
 	miniClock:ClearAllPoints()
 	miniClock:SetPoint("LEFT", titleWidthTexts[2], "RIGHT", 8, 0)
 	FitWidth()

@@ -1,3 +1,7 @@
+## v0.1.14
+
+- The clock is centered on "Forever launches", as in the minimized header.
+
 ## v0.1.13
 
 - The infinity sign by "Forever launches" is smooth.
