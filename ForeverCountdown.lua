@@ -4,7 +4,7 @@
 local ADDON_NAME, ns = ...
 
 -- Keep equal to ## Version in the .toc.
-local VERSION = "0.1.16"
+local VERSION = "0.1.17"
 ns.VERSION = VERSION
 -- The addon's name as the player sees it: the start of chat lines.
 local ADDON_TITLE = "Forever Countdown"
@@ -32,7 +32,7 @@ local ROW_GAP = 8 -- between milestones
 local LINE_GAP = 2 -- a title to the line under it
 local ICON_COLUMN = 20
 local ICON_GAP = 6
-local CLOCK_GAP = 15 -- "launches" to the clock
+local CLOCK_GAP = 8 -- the title to the clock
 local INFINITY_WIDTH = 24
 local CLOCK_EXTRA = 3 -- the clock figures' size over the header text's
 
@@ -314,18 +314,18 @@ local headerFont, lineFont -- the tracker's own font objects
 local launchRest -- "launches" after the shining "Forever" in the launch row
 local launchWordText -- "Forever" in the launch row
 local titleWidthTexts -- the header's "Countdown to" and "Forever"
-local fullClock, miniClock
+local clock -- the timer, in the header after the title
 
 -- The panel is at least as wide as a tracker section, and wide enough for its longest line:
--- "Forever launches" with the clock beside it, or the minimized header ("Countdown to Forever",
--- the clock and the button). The width is the same open and minimized (the user asked, 0.1.1).
+-- the header ("Countdown to Forever", the clock and the button) or "Forever launches". The width
+-- is the same open and minimized (the user asked, 0.1.1).
 local RIGHT_MARGIN = 8
 local function FitWidth()
 	local launchLine = HEADER_TEXT_X + ICON_COLUMN + ICON_GAP + launchWordText:GetStringWidth() + 4
-		+ launchRest:GetStringWidth() + CLOCK_GAP + fullClock:GetWidth() + RIGHT_MARGIN
-	local miniLine = HEADER_TEXT_X + titleWidthTexts[1]:GetStringWidth() + 4 + titleWidthTexts[2]:GetStringWidth() + 8
-		+ miniClock:GetWidth() + BUTTON_SIZE + RIGHT_MARGIN
-	panel:SetWidth(math.ceil(math.max(HEADER_WIDTH, launchLine, miniLine)))
+		+ launchRest:GetStringWidth() + RIGHT_MARGIN
+	local headerLine = HEADER_TEXT_X + titleWidthTexts[1]:GetStringWidth() + 4 + titleWidthTexts[2]:GetStringWidth() + CLOCK_GAP
+		+ clock:GetWidth() + BUTTON_SIZE + RIGHT_MARGIN
+	panel:SetWidth(math.ceil(math.max(HEADER_WIDTH, launchLine, headerLine)))
 end
 
 local function SavePosition()
@@ -409,21 +409,17 @@ local function Refresh()
 	local days, hours, minutes, seconds = ns.ClockParts(now)
 	if days then
 		launchRest:SetText(T.launches)
-		fullClock:Set(days, hours, minutes, seconds)
-		miniClock:Set(days, hours, minutes, seconds)
-		fullClock:Show()
-		miniClock:Show()
+		clock:Set(days, hours, minutes, seconds)
+		clock:Show()
 	else
 		launchRest:SetText(T.launched)
-		fullClock:Hide()
-		miniClock:Hide()
+		clock:Hide()
 	end
 end
 
 local function SetMinimized(minimized)
 	saved.minimized = minimized
 	panel.body:SetAlpha(minimized and 0 or 1)
-	panel.mini:SetAlpha(minimized and 1 or 0)
 	local art = minimized and EXPAND_ART or COLLAPSE_ART
 	panel.button:GetNormalTexture():SetAtlas(art)
 	panel.button:GetPushedTexture():SetAtlas(art .. "-Pressed")
@@ -452,10 +448,8 @@ local function Animate()
 	end
 	local time = GetTime()
 	-- The seconds fade in as they change.
-	for _, clock in ipairs({ fullClock, miniClock }) do
-		local fade = math.min(1, (time - clock.tickedAt) / 0.35)
-		clock.secondsText:SetAlpha(0.3 + 0.7 * fade)
-	end
+	local fade = math.min(1, (time - clock.tickedAt) / 0.35)
+	clock.secondsText:SetAlpha(0.3 + 0.7 * fade)
 	-- "Forever": the glow rises and fades.
 	local glowAlpha = 0.25 + 0.35 * (0.5 - 0.5 * math.cos(2 * math.pi * (time % GLOW_PERIOD) / GLOW_PERIOD))
 	for _, shine in ipairs(shining) do
@@ -546,21 +540,17 @@ end
 local function Relayout()
 	local headerSize = select(2, headerFont:GetFont())
 	local clockSize = headerSize + CLOCK_EXTRA
-	fullClock:Resize(clockSize)
-	miniClock:Resize(clockSize)
-	-- The clock is larger than the text beside it and centered on it, in the launch row as in the
-	-- minimized header (the user's choice, 0.1.14, after trying a shared baseline in 0.1.8 and
-	-- aligned tops in 0.1.9).
-	fullClock:ClearAllPoints()
-	fullClock:SetPoint("LEFT", launchRest, "RIGHT", CLOCK_GAP, 0)
-	miniClock:ClearAllPoints()
-	miniClock:SetPoint("LEFT", titleWidthTexts[2], "RIGHT", 8, 0)
+	clock:Resize(clockSize)
+	-- The clock is larger than the title and centered on it (the user's choice, 0.1.14, after
+	-- trying a shared baseline in 0.1.8 and aligned tops in 0.1.9).
+	clock:ClearAllPoints()
+	clock:SetPoint("LEFT", titleWidthTexts[2], "RIGHT", CLOCK_GAP, 0)
 	FitWidth()
 	local height = HEADER_HEIGHT + ROW_TOP_GAP
 	for i, row in ipairs(rows) do
 		local titleHeight = row.title:GetStringHeight()
 		if i == 4 then
-			titleHeight = math.max(launchWordText:GetStringHeight(), fullClock:GetHeight())
+			titleHeight = launchWordText:GetStringHeight()
 		end
 		height = height + titleHeight + LINE_GAP + row.line:GetStringHeight() + (i < #rows and ROW_GAP or 4)
 	end
@@ -623,11 +613,9 @@ local function Build()
 	shining[#shining + 1] = fullWord
 	titleWidthTexts = { countdownTo, fullWord.word }
 
-	-- Minimized, the clock follows the title.
-	local mini = CreateFrame("Frame", nil, header)
-	mini:SetAllPoints()
-	miniClock = CreateClock(mini, headerFont)
-	panel.mini = mini
+	-- The clock follows the title, open and minimized (the user asked, 0.1.17: it used to sit
+	-- beside "Forever launches" while open).
+	clock = CreateClock(full, headerFont)
 
 	local button = CreateFrame("Button", nil, header)
 	button:SetSize(BUTTON_SIZE, BUTTON_SIZE)
@@ -653,8 +641,8 @@ local function Build()
 	quill = CreateQuill(rows[3].icon, 15)
 	quill:SetPoint("CENTER", 0, 1)
 
-	-- "Forever launches", with the clock beside it. Its title is two texts, the shining
-	-- "Forever" and "launches", so the row's own title stays empty.
+	-- "Forever launches". Its title is two texts, the shining "Forever" and "launches", so the
+	-- row's own title stays empty.
 	local launchRow = rows[4]
 	local launchWord = CreateShiningWord(launchRow, lineFont)
 	launchWord.word:SetPoint("TOPLEFT", launchRow.title)
@@ -663,7 +651,6 @@ local function Build()
 	launchRest = CreateText(launchRow, lineFont)
 	launchRest:SetTextColor(GOLD.r, GOLD.g, GOLD.b)
 	launchRest:SetPoint("LEFT", launchWord.word, "RIGHT", 4, 0)
-	fullClock = CreateClock(launchRow, headerFont)
 	launchRow.line:ClearAllPoints()
 	launchRow.line:SetPoint("TOPLEFT", launchWord.word, "BOTTOMLEFT", 0, -LINE_GAP)
 	launchRow.icon:ClearAllPoints()

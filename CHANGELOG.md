@@ -1,3 +1,7 @@
+## v0.1.17
+
+- The clock is in the header after "Countdown to Forever", open or minimized.
+
 ## v0.1.16
 
 - Upcoming dates say "in", such as "Oct 27 · in 22 Days".
