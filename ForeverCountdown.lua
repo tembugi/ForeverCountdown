@@ -4,7 +4,7 @@
 local ADDON_NAME, ns = ...
 
 -- Keep equal to ## Version in the .toc.
-local VERSION = "0.1.4"
+local VERSION = "0.1.5"
 ns.VERSION = VERSION
 -- The addon's name as the player sees it: the start of chat lines.
 local ADDON_TITLE = "Forever Countdown"
@@ -33,7 +33,8 @@ local LINE_GAP = 2 -- a title to the line under it
 local ICON_COLUMN = 20
 local ICON_GAP = 6
 local CLOCK_GAP = 15 -- "launches" to the clock
-local INFINITY_WIDTH = 30
+local INFINITY_WIDTH = 24
+local CLOCK_EXTRA = 2 -- the clock's size over the header text's
 
 -- Colors: the tracker's own when it is loaded, else Blizzard's usual values.
 local function TrackerColor(key, r, g, b)
@@ -107,8 +108,8 @@ end
 -- Animate).
 local INFINITY_STEPS = 120
 local NIB = math.rad(-38)
-local INFINITY_THIN = 1.4
-local INFINITY_THICK = 2.8
+local INFINITY_THIN = 1.1
+local INFINITY_THICK = 2.2
 local CROSSING_EDGE_TRIM = 5 -- steps at each end of the over strand without an edge, so it joins smoothly
 local function CreateInfinity(parent, width)
 	local height = width * 60 / 124
@@ -153,15 +154,15 @@ local function CreateInfinity(parent, width)
 	local function Glow()
 		return GLOW[1], GLOW[2], GLOW[3]
 	end
-	Pass(glow, 0, INFINITY_STEPS, "ARTWORK", 0, 3, Glow)
-	Pass(ribbon, 0, INFINITY_STEPS, "BORDER", 0, 1.2, Edge)
+	Pass(glow, 0, INFINITY_STEPS, "ARTWORK", 0, 2.4, Glow)
+	Pass(ribbon, 0, INFINITY_STEPS, "BORDER", 0, 0.9, Edge)
 	Pass(ribbon, 0, INFINITY_STEPS, "ARTWORK", 0, 0, Silver)
 	-- The strand through the crossing at a quarter of the way round, drawn over the other.
 	local overFirst, overLast = math.floor(INFINITY_STEPS * 0.19), math.ceil(INFINITY_STEPS * 0.31)
-	Pass(ribbon, overFirst + CROSSING_EDGE_TRIM, overLast - CROSSING_EDGE_TRIM, "OVERLAY", 0, 1.2, Edge)
+	Pass(ribbon, overFirst + CROSSING_EDGE_TRIM, overLast - CROSSING_EDGE_TRIM, "OVERLAY", 0, 0.9, Edge)
 	Pass(ribbon, overFirst, overLast, "OVERLAY", 1, 0, Silver)
 	frame.glow = glow
-	frame.spark = Disc(ribbon, "OVERLAY", 2, 0, 0, INFINITY_THICK + 1, 1, 1, 0.94, 0.95)
+	frame.spark = Disc(ribbon, "OVERLAY", 2, 0, 0, INFINITY_THICK + 1.5, 1, 1, 0.94, 0.9)
 	frame.spark:SetBlendMode("ADD")
 	return frame
 end
@@ -190,15 +191,15 @@ local function CreateQuill(parent, size)
 	pen:SetSize(size, size)
 	pen:SetPoint("TOPLEFT")
 	local r, g, b = GOLD.r, GOLD.g, GOLD.b
-	local function Scaled(points)
+	local function Scaled(points, factor)
 		local out = {}
 		for i, p in ipairs(points) do
-			out[i] = { p[1] * scale, p[2] * scale }
+			out[i] = { p[1] * factor, p[2] * factor }
 		end
 		return out
 	end
 	local function Stroke(target, points, thickness, list)
-		for _, p in ipairs(Along(Scaled(points), thickness / 3)) do
+		for _, p in ipairs(Along(Scaled(points, scale), thickness / 3)) do
 			local disc = Disc(target, "ARTWORK", 0, p[1], p[2], thickness, r, g, b)
 			if list then
 				list[#list + 1] = disc
@@ -238,69 +239,39 @@ local function CreateShiningWord(parent, fontObject)
 	return { word = word, glow = glow }
 end
 
--- The countdown: days, hours, minutes and seconds in the game's heavy number font with its own
--- black outline (bolder, as the user asked in 0.1.4), white with gold colons that stay still,
--- as tall as the tracker's header text (see Relayout). Each figure
--- sits in a box as wide as the widest figure, so the clock doesn't jiggle as its figures change.
--- The seconds fade in as they tick (see Animate).
-local function CreateClock(parent)
-	local numberFont = Font("NumberFont_Outline_Huge", "GameFontHighlightLarge")
-	local file, _, outline = numberFont:GetFont()
-	outline = outline ~= "" and outline or "OUTLINE"
+-- The countdown: days, hours, minutes and seconds in bold white (the tracker's header font with
+-- a black outline, a little larger than the header text, see Relayout), with gold colons that
+-- stay still. The seconds are a text of their own, so they fade in as they tick (see Animate).
+-- A text out of sight is never measured: the game answered with the font's default size, which
+-- spread the figures apart (0.1.4).
+local CLOCK_FLAGS = "OUTLINE"
+local function CreateClock(parent, fontObject)
+	local file = fontObject:GetFont()
+	local colon = GOLD:WrapTextInColorCode(":")
 	local clock = CreateFrame("Frame", nil, parent)
-	local measure = CreateText(clock, numberFont)
-	measure:Hide()
-	local cells, colons = {}, {}
-	for group = 1, 4 do
-		for _ = 1, 2 do
-			local cell = CreateText(clock, numberFont)
-			cell:SetJustifyH("CENTER")
-			cell:SetTextColor(WHITE.r, WHITE.g, WHITE.b)
-			cells[#cells + 1] = cell
-		end
-		if group < 4 then
-			local colon = CreateText(clock, numberFont)
-			colon:SetJustifyH("CENTER")
-			colon:SetText(":")
-			colon:SetTextColor(GOLD.r, GOLD.g, GOLD.b)
-			colons[#colons + 1] = colon
-		end
-	end
-	clock.cells = cells
+	local main = CreateText(clock, fontObject)
+	main:SetTextColor(WHITE.r, WHITE.g, WHITE.b)
+	main:SetPoint("LEFT")
+	local seconds = CreateText(clock, fontObject)
+	seconds:SetTextColor(WHITE.r, WHITE.g, WHITE.b)
+	seconds:SetPoint("LEFT", main, "RIGHT")
+	clock.secondsText = seconds
 	clock.tickedAt = 0
 	function clock:Resize(size)
-		measure:SetFont(file, size, outline)
-		local figure = 0
-		for digit = 0, 9 do
-			measure:SetText(tostring(digit))
-			figure = math.max(figure, measure:GetUnboundedStringWidth())
-		end
-		measure:SetText(":")
-		local colonWidth = measure:GetUnboundedStringWidth() + 2
-		figure = math.ceil(figure)
-		local x = 0
-		for i, cell in ipairs(cells) do
-			cell:SetFont(file, size, outline)
-			cell:SetWidth(figure)
-			cell:SetPoint("LEFT", x, 0)
-			x = x + figure
-			if i % 2 == 0 and colons[i / 2] then
-				local colon = colons[i / 2]
-				colon:SetFont(file, size, outline)
-				colon:SetWidth(colonWidth)
-				colon:SetPoint("LEFT", x, 0)
-				x = x + colonWidth
-			end
-		end
-		self:SetSize(x, size + 4)
+		main:SetFont(file, size, CLOCK_FLAGS)
+		seconds:SetFont(file, size, CLOCK_FLAGS)
+		local mainText, secondsText = main:GetText(), seconds:GetText()
+		main:SetText("00" .. colon .. "00" .. colon .. "00" .. colon)
+		seconds:SetText("00")
+		self:SetSize(math.ceil(main:GetUnboundedStringWidth() + seconds:GetUnboundedStringWidth()), size + 4)
+		main:SetText(mainText)
+		seconds:SetText(secondsText)
 	end
-	function clock:Set(days, hours, minutes, seconds)
-		local text = string.format("%02d%02d%02d%02d", math.min(days, 99), hours, minutes, seconds)
-		for i = 1, 8 do
-			cells[i]:SetText(text:sub(i, i))
-		end
-		if seconds ~= self.seconds then
-			self.seconds = seconds
+	function clock:Set(days, hours, minutes, secs)
+		main:SetText(string.format("%02d%s%02d%s%02d%s", math.min(days, 99), colon, hours, colon, minutes, colon))
+		seconds:SetText(string.format("%02d", secs))
+		if secs ~= self.seconds then
+			self.seconds = secs
 			self.tickedAt = GetTime()
 		end
 	end
@@ -426,7 +397,7 @@ end
 
 local function SetMinimized(minimized)
 	saved.minimized = minimized
-	panel.body:SetShown(not minimized)
+	panel.body:SetAlpha(minimized and 0 or 1)
 	panel.mini:SetShown(minimized)
 	local art = minimized and EXPAND_ART or COLLAPSE_ART
 	panel.button:GetNormalTexture():SetAtlas(art)
@@ -445,6 +416,7 @@ local QUILL_PERIOD = 2.4
 local PEN_PATH = { { 0, -1, 0 }, { 0.1, 0.5, 1 }, { 0.2, 2, 0 }, { 0.3, 3.5, 1 }, { 0.4, 5, 0 }, { 0.55, 7, 0.5 }, { 0.7, 7, 3 }, { 1, -1, 0 } }
 local TRACE_PERIOD = 4
 local GLOW_PERIOD = 3.6
+local GLOW_STRENGTH = 0.35 -- the glow at its brightest, softened in 0.1.5 (it blurred "Forever")
 
 local lastSecond
 local function Animate()
@@ -457,19 +429,18 @@ local function Animate()
 	-- The seconds fade in as they change.
 	for _, clock in ipairs({ fullClock, miniClock }) do
 		local fade = math.min(1, (time - clock.tickedAt) / 0.35)
-		clock.cells[7]:SetAlpha(0.3 + 0.7 * fade)
-		clock.cells[8]:SetAlpha(0.3 + 0.7 * fade)
+		clock.secondsText:SetAlpha(0.3 + 0.7 * fade)
 	end
 	-- "Forever": the glow rises and fades.
 	local glowAlpha = 0.25 + 0.35 * (0.5 - 0.5 * math.cos(2 * math.pi * (time % GLOW_PERIOD) / GLOW_PERIOD))
 	for _, shine in ipairs(shining) do
 		if shine.word:IsVisible() then
 			for _, copy in ipairs(shine.glow) do
-				copy:SetAlpha(glowAlpha * 0.6)
+				copy:SetAlpha(glowAlpha * GLOW_STRENGTH)
 			end
 		end
 	end
-	if not panel.body:IsShown() then
+	if saved.minimized then
 		return
 	end
 	-- The quill writes a line, lifts, and the ink fades before the next one.
@@ -494,7 +465,7 @@ local function Animate()
 	local p, q = points[index], points[(index + 1) % INFINITY_STEPS]
 	local k = position - index
 	infinity.spark:SetPoint("CENTER", infinity, "TOPLEFT", p[1] + (q[1] - p[1]) * k, -(p[2] + (q[2] - p[2]) * k))
-	infinity.glow:SetAlpha(glowAlpha * 0.6)
+	infinity.glow:SetAlpha(glowAlpha * GLOW_STRENGTH)
 end
 
 local stopped = false
@@ -535,9 +506,9 @@ end
 -- as wide as its longest line and as tall as its rows. Runs once built and again whenever the
 -- tracker's Text Size setting changes.
 local function Relayout()
-	local headerSize = select(2, headerFont:GetFont())
-	fullClock:Resize(headerSize)
-	miniClock:Resize(headerSize)
+	local clockSize = select(2, headerFont:GetFont()) + CLOCK_EXTRA
+	fullClock:Resize(clockSize)
+	miniClock:Resize(clockSize)
 	FitWidth()
 	local height = HEADER_HEIGHT + ROW_TOP_GAP
 	for i, row in ipairs(rows) do
@@ -609,7 +580,7 @@ local function Build()
 	-- Minimized, the clock follows the title.
 	local mini = CreateFrame("Frame", nil, header)
 	mini:SetAllPoints()
-	miniClock = CreateClock(mini)
+	miniClock = CreateClock(mini, headerFont)
 	miniClock:SetPoint("LEFT", fullWord.word, "RIGHT", 8, 0)
 	panel.mini = mini
 
@@ -647,14 +618,14 @@ local function Build()
 	launchRest = CreateText(launchRow, lineFont)
 	launchRest:SetTextColor(GOLD.r, GOLD.g, GOLD.b)
 	launchRest:SetPoint("LEFT", launchWord.word, "RIGHT", 4, 0)
-	fullClock = CreateClock(launchRow)
+	fullClock = CreateClock(launchRow, headerFont)
 	fullClock:SetPoint("LEFT", launchRest, "RIGHT", CLOCK_GAP, 0)
 	launchRow.line:ClearAllPoints()
 	launchRow.line:SetPoint("TOPLEFT", launchWord.word, "BOTTOMLEFT", 0, -LINE_GAP)
 	launchRow.icon:ClearAllPoints()
 	launchRow.icon:SetPoint("CENTER", launchWord.word, "LEFT", -ICON_GAP - ICON_COLUMN / 2, 0)
 	infinity = CreateInfinity(launchRow.icon, INFINITY_WIDTH)
-	infinity:SetPoint("CENTER", 2, 0)
+	infinity:SetPoint("CENTER")
 
 	Refresh()
 	Relayout()

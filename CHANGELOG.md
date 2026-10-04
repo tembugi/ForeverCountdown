@@ -1,3 +1,9 @@
+## v0.1.5
+
+- The clock is compact, bold and a little larger.
+- The infinity sign is slimmer and no longer runs into "Forever".
+- The glow behind "Forever" is softer.
+
 ## v0.1.4
 
 - The infinity sign by "Forever launches" is drawn so it shows, with a round light running around it.
