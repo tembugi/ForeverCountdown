@@ -36,6 +36,10 @@ The tracker's own pieces, read from the game while it runs, with Blizzard's valu
 - Unit labels under the clock, progress bars, paw prints, window borders, close buttons and stamps were tried on the canvas and rejected.
 - Look changes are mocked on the design canvas first (https://claude.ai/artifact/TP8ZFtWEZYej4VEp7DwVKh) and built after the user picks.
 
+## Logo
+
+The infinity sign standing as an hourglass, white (shaded to soft silver), drawn with a broad pen like the addon's own infinity sign, gold sand falling from the top bulb through the crossing onto a heap below, on the dark ground of the other addons' logos (board L4, D5, the user's pick, 2026-10-05). `Logo/ForeverCountdown-logo.svg`, rendered by `Logo/make_logo.py` to the 400 px CurseForge picture and `Icon.tga` (the addon list's icon, `## IconTexture`). Tried and dropped: the sign lying on its side as the hourglass (L1), glass bulbs, rings and end plates, gold instead of white.
+
 ## Behavior
 
 - The panel can be dragged by its header anywhere on the screen; the place is saved. Until it is moved, it sits left of the minimap.

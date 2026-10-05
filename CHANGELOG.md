@@ -1,3 +1,7 @@
+## v1.1.1
+
+- The addon has its own icon in the addon list.
+
 ## v1.1.0
 
 - When Forever launches, the clock stays at zeros, every line turns grey and says how many days ago, and a last line says "Welcome to Forever!".
