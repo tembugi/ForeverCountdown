@@ -1,3 +1,7 @@
+## v1.1.8
+
+- The addon's icon has a gold ring.
+
 ## v1.1.5
 
 - More sand in the top of the addon's icon.
