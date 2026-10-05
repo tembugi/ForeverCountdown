@@ -1,3 +1,7 @@
+## v1.1.3
+
+- A cleaner crossing in the addon's icon.
+
 ## v1.1.2
 
 - Until you move it, the panel sits on the left of the screen, opposite the quest tracker, so it no longer covers your buffs.

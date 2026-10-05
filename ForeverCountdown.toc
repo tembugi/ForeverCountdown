@@ -2,7 +2,7 @@
 ## Title: Forever Countdown
 ## Notes: Counts down to WoW Forever's launch, with the beta's end and name reservation on the way.
 ## Author: tembugi
-## Version: 1.1.2
+## Version: 1.1.3
 ## Category: Miscellaneous
 ## IconTexture: Interface\AddOns\ForeverCountdown\Icon
 ## AllowLoadGameType: camelot
