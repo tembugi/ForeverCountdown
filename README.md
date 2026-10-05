@@ -1,5 +1,5 @@
 # Forever Countdown
 
-A countdown to WoW Forever's launch in the style of the quest tracker, with the beta's end and name reservation on the way.
+A timer counting down to WoW Forever's launch, the beta's end and name reservation.
 
 An addon for WoW Forever.
