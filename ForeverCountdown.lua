@@ -4,7 +4,7 @@
 local ADDON_NAME, ns = ...
 
 -- Keep equal to ## Version in the .toc.
-local VERSION = "1.1.1"
+local VERSION = "1.1.2"
 ns.VERSION = VERSION
 -- The addon's name as the player sees it: the start of chat lines.
 local ADDON_TITLE = "Forever Countdown"
@@ -174,6 +174,7 @@ local function CreateInfinity(parent, width)
 		frame.widths[i] = INFINITY_THIN + (INFINITY_THICK - INFINITY_THIN) * math.abs(math.sin(angle - NIB))
 	end
 	frame.trace, frame.halo = {}, {}
+	frame.sizes, frame.alphas = {}, {} -- each light disc's width and alpha as last set
 	for k = 1, TRACE_LENGTH do
 		local halo = Disc(frame, "OVERLAY", 0, 0, 0, INFINITY_THIN, 1, 0.97, 0.8)
 		halo:SetBlendMode("ADD")
@@ -243,6 +244,7 @@ local function CreateQuill(parent, size)
 	Stroke(pen, { { 7, 20 }, { 5, 24 } }, QUILL_STROKE)
 	frame.pen = pen
 	frame.ink = {}
+	frame.inkAlpha = {} -- each ink disc's alpha as last set
 	Stroke(frame, SCRIBBLE, QUILL_STROKE * 0.8, frame.ink)
 	for _, disc in ipairs(frame.ink) do
 		disc:SetAlpha(0)
@@ -265,8 +267,9 @@ local function SetQuillDone(quill, done)
 		disc:SetVertexColor(r, g, b)
 	end
 	quill.pen:SetPoint("TOPLEFT")
-	for _, ink in ipairs(quill.ink) do
-		ink:SetAlpha(done and 1 or 0)
+	for i, ink in ipairs(quill.ink) do
+		quill.inkAlpha[i] = done and 1 or 0
+		ink:SetAlpha(quill.inkAlpha[i])
 	end
 end
 
@@ -390,6 +393,7 @@ local launchWordText -- "Forever" in the launch row
 local welcomeTexts -- "Welcome to", "Forever" and "!" in the last row, once Forever has launched
 local shownLaunched -- whether the panel shows Forever as launched
 local titleWidthTexts -- the header's "Countdown to" and "Forever"
+local headerArt, headerArtWidth -- the header's art and its own width
 local clock -- the timer, in the header after the title
 
 -- The panel is at least as wide as a tracker section, and wide enough for its longest line:
@@ -414,7 +418,11 @@ local function FitWidth()
 		local text = math.max(row.title:GetStringWidth(), row.line:GetStringWidth())
 		width = math.max(width, HEADER_TEXT_X + ICON_COLUMN + ICON_GAP + text + RIGHT_MARGIN)
 	end
-	panel:SetWidth(math.ceil(width))
+	width = math.ceil(width)
+	panel:SetWidth(width)
+	-- The header's art at its own size, centered as the tracker has it, or stretched to the
+	-- panel's width when the panel is wider, at large Text Size (the user agreed, 1.1.2).
+	headerArt:SetWidth(math.max(headerArtWidth, width))
 end
 
 local function SavePosition()
@@ -425,14 +433,46 @@ local function SavePosition()
 	saved.position = { point = "TOPLEFT", x = left, y = top - UIParent:GetHeight() }
 end
 
+-- Until the player moves it, the panel mirrors the objective tracker: as far in from the
+-- screen's left edge as the tracker is from its right edge, level with the tracker's top (the
+-- user asked, 1.1.2; left of the minimap it covered the buffs). The tracker's place is read from
+-- the game, as Edit Mode and the screen leave it; Blizzard's (Edit Mode's preset layouts: 110 in
+-- from the right, 275 down) when it can't be read yet.
+local TRACKER_X, TRACKER_Y = 110, -275
+local function DefaultPlace()
+	local tracker = ObjectiveTrackerFrame
+	local right, top = tracker and tracker:GetRight(), tracker and tracker:GetTop()
+	local screenRight, screenTop = UIParent:GetRight(), UIParent:GetTop()
+	if not (right and top and screenRight and screenTop) then
+		return TRACKER_X, TRACKER_Y
+	end
+	local scale = tracker:GetEffectiveScale() / UIParent:GetEffectiveScale()
+	return math.floor(screenRight - right * scale + 0.5), math.floor(top * scale - screenTop + 0.5)
+end
+
+local placedX, placedY -- the default place the panel is at, while the player hasn't moved it
+local moving -- whether the player is dragging the panel
 local function PlacePanel()
 	panel:ClearAllPoints()
 	if saved.position then
 		panel:SetPoint(saved.position.point, UIParent, saved.position.point, saved.position.x, saved.position.y)
-	elseif MinimapCluster then
-		panel:SetPoint("TOPRIGHT", MinimapCluster, "TOPLEFT", -12, -8)
+		placedX, placedY = nil, nil
 	else
-		panel:SetPoint("TOPRIGHT", UIParent, "TOPRIGHT", -260, -20)
+		placedX, placedY = DefaultPlace()
+		panel:SetPoint("TOPLEFT", UIParent, "TOPLEFT", placedX, placedY)
+	end
+end
+
+-- The tracker moves with Edit Mode, the screen's size and the frames the game stacks beside it,
+-- some of which move its container without touching the tracker itself, so its place is read
+-- again once a second (see Refresh), and the panel follows while the player hasn't moved it.
+local function FollowTracker()
+	if saved.position or moving then
+		return
+	end
+	local x, y = DefaultPlace()
+	if x ~= placedX or y ~= placedY then
+		PlacePanel()
 	end
 end
 
@@ -522,6 +562,7 @@ local function Refresh()
 	-- The lines' texts change with the days ("Today", "Name reservation ends"), so the width is
 	-- fitted to them again each time.
 	FitWidth()
+	FollowTracker()
 end
 
 local function SetMinimized(minimized)
@@ -544,7 +585,7 @@ local QUILL_PERIOD = 2.4
 local PEN_PATH = { { 0, -1, 0 }, { 0.1, 0.5, 1 }, { 0.2, 2, 0 }, { 0.3, 3.5, 1 }, { 0.4, 5, 0 }, { 0.55, 7, 0.5 }, { 0.7, 7, 3 }, { 1, -1, 0 } }
 local TRACE_PERIOD = 4
 local GLOW_PERIOD = 3.6
-local GLOW_STRENGTH = 0.35 -- the glow at its brightest, softened in 0.1.5 (it blurred "Forever")
+local GLOW_STRENGTH = 0.35 -- how strong the glow is, softened in 0.1.5 (it blurred "Forever")
 
 local lastSecond
 local function Animate()
@@ -557,12 +598,12 @@ local function Animate()
 	-- The seconds fade in as they change.
 	local fade = math.min(1, (time - clock.tickedAt) / 0.35)
 	clock.secondsText:SetAlpha(0.3 + 0.7 * fade)
-	-- "Forever": the glow rises and fades.
-	local glowAlpha = 0.25 + 0.35 * (0.5 - 0.5 * math.cos(2 * math.pi * (time % GLOW_PERIOD) / GLOW_PERIOD))
-	for _, shine in ipairs(shining) do
-		if not shine.done and shine.word:IsVisible() then
+	-- "Forever": the glow rises and fades; minimized, only the header's shows.
+	local glowAlpha = GLOW_STRENGTH * (0.25 + 0.35 * (0.5 - 0.5 * math.cos(2 * math.pi * (time % GLOW_PERIOD) / GLOW_PERIOD)))
+	for i, shine in ipairs(shining) do
+		if not shine.done and shine.word:IsVisible() and (i == 1 or not saved.minimized) then
 			for _, copy in ipairs(shine.glow) do
-				copy:SetAlpha(glowAlpha * GLOW_STRENGTH)
+				copy:SetAlpha(glowAlpha)
 			end
 		end
 	end
@@ -583,8 +624,14 @@ local function Animate()
 		end
 		local written = math.min(1, phase / 0.55) * #quill.ink
 		local inkAlpha = phase < 0.8 and 1 or math.max(0, 1 - (phase - 0.8) / 0.2)
+		-- Only the ink that changes is set: most of it stays as it was from frame to frame.
+		local shown = quill.inkAlpha
 		for i, ink in ipairs(quill.ink) do
-			ink:SetAlpha(i <= written and inkAlpha or 0)
+			local alpha = i <= written and inkAlpha or 0
+			if shown[i] ~= alpha then
+				shown[i] = alpha
+				ink:SetAlpha(alpha)
+			end
 		end
 	end
 	-- The light slides along the infinity sign.
@@ -599,14 +646,22 @@ local function Animate()
 		local halo = infinity.halo[k]
 		disc:SetPoint("CENTER", infinity, "TOPLEFT", x, y)
 		halo:SetPoint("CENTER", infinity, "TOPLEFT", x, y)
-		disc:SetSize(widths[index], widths[index])
-		halo:SetSize(widths[index] + HALO_SPREAD, widths[index] + HALO_SPREAD)
+		-- Sizes and brightness change only now and then: set them only when they do.
+		local width = widths[index]
+		if infinity.sizes[k] ~= width then
+			infinity.sizes[k] = width
+			disc:SetSize(width, width)
+			halo:SetSize(width + HALO_SPREAD, width + HALO_SPREAD)
+		end
 		local alpha = TRACE_STRENGTH * math.sin(math.pi * (k - 0.5) / TRACE_LENGTH)
 		if index >= UNDER_FIRST and index < UNDER_LAST then
 			alpha = 0
 		end
-		disc:SetAlpha(alpha)
-		halo:SetAlpha(alpha * HALO_STRENGTH)
+		if infinity.alphas[k] ~= alpha then
+			infinity.alphas[k] = alpha
+			disc:SetAlpha(alpha)
+			halo:SetAlpha(alpha * HALO_STRENGTH)
+		end
 	end
 end
 
@@ -705,17 +760,20 @@ local function Build()
 	header:EnableMouse(true)
 	header:RegisterForDrag("LeftButton")
 	header:SetScript("OnDragStart", function()
+		moving = true
 		panel:StartMoving()
 	end)
 	header:SetScript("OnDragStop", function()
+		moving = false
 		panel:StopMovingOrSizing()
 		SavePosition()
 		-- Anchor by the top left again, so minimizing keeps the header where it was dropped.
 		PlacePanel()
 	end)
-	local art = header:CreateTexture(nil, "BACKGROUND")
-	art:SetAtlas(HEADER_ART, true)
-	art:SetPoint("CENTER")
+	headerArt = header:CreateTexture(nil, "BACKGROUND")
+	headerArt:SetAtlas(HEADER_ART, true)
+	headerArt:SetPoint("CENTER")
+	headerArtWidth = Positive(headerArt:GetWidth(), 300)
 
 	-- "Countdown to" in gold, then the shining "Forever", in the tracker's header font. It stays
 	-- when minimized (the user asked, 0.1.3).

@@ -1,3 +1,9 @@
+## v1.1.2
+
+- Until you move it, the panel sits on the left of the screen, opposite the quest tracker, so it no longer covers your buffs.
+- The header's bar stretches to fit at large text sizes.
+- The animations do less work each frame.
+
 ## v1.1.1
 
 - The addon has its own icon in the addon list.

@@ -429,6 +429,71 @@ Test("the panel takes its sizes from the tracker's own header", function()
 	Clean(game, "sizes")
 end)
 
+local function Anchor(game)
+	local point, relativeTo, relativePoint, x, y = game.panel:GetPoint(1)
+	return string.format("%s %s %s %d %d", point, relativeTo == UIParent and "UIParent" or "?", relativePoint, x, y)
+end
+
+Test("until moved, the panel mirrors the objective tracker on the left of the screen", function()
+	local game = Panel(Utc(2026, 10, 5, 12))
+	Equal(Anchor(game), "TOPLEFT UIParent TOPLEFT 110 -275", "mirrors the tracker")
+	-- Edit Mode moves the tracker: the panel follows within a second.
+	game:Place(ObjectiveTrackerFrame, { 1400, 700, 1660, 300 })
+	game:Frames(70)
+	Equal(Anchor(game), "TOPLEFT UIParent TOPLEFT 260 -380", "follows the tracker")
+	-- A tracker at another scale: its place in the screen's units.
+	ObjectiveTrackerFrame:SetScale(0.5)
+	game:Place(ObjectiveTrackerFrame, { 3000, 1600, 3520, 800 })
+	game:Frames(70)
+	Equal(Anchor(game), "TOPLEFT UIParent TOPLEFT 160 -280", "a tracker at half scale")
+	Clean(game, "follow")
+end)
+
+Test("before the tracker has a place, the panel uses Blizzard's; once moved it stays", function()
+	local game = NewGame(Utc(2026, 10, 5, 12))
+	game:Place(ObjectiveTrackerFrame, nil)
+	game:Load():Frames(2)
+	Equal(Anchor(game), "TOPLEFT UIParent TOPLEFT 110 -275", "Blizzard's place for the tracker")
+	game = Panel(Utc(2026, 10, 5, 12), { format = 1, minimized = false, position = { point = "TOPLEFT", x = 500, y = -40 } })
+	game:Place(ObjectiveTrackerFrame, { 1400, 700, 1660, 300 })
+	game:Frames(70)
+	Equal(Anchor(game), "TOPLEFT UIParent TOPLEFT 500 -40", "where the player put it")
+	Clean(game, "moved")
+end)
+
+Test("the header's art keeps its size, or stretches to a panel wider than it", function()
+	local game = Panel(Utc(2026, 10, 5, 12))
+	local art
+	for _, widget in ipairs(game.widgets) do
+		if widget.atlas == "UI-QuestTracker-Secondary-Objective-Header" then
+			art = widget
+		end
+	end
+	Equal(game.panel:GetWidth() < 300 and art:GetWidth(), 300, "its own width at the tracker's usual text")
+	ObjectiveTrackerManager:SetTextSize(20)
+	game:Frames(2)
+	Equal(game.panel:GetWidth() > 300, true, "a wider panel at the largest text")
+	Equal(art:GetWidth(), game.panel:GetWidth(), "the art as wide as the panel")
+	Clean(game, "art")
+end)
+
+Test("the animation sets only what changes", function()
+	for _, minimized in ipairs({ false, true }) do
+		local game = Panel(Utc(2026, 10, 5, 12), { format = 1, minimized = minimized }):Frames(70)
+		game.calls = {}
+		game:Frames(600, 10)
+		local sets = 0
+		for name, count in pairs(game.calls) do
+			if name:find("^Set") then
+				sets = sets + count
+			end
+		end
+		local limit = minimized and 10 or 80
+		Equal(sets / 600 <= limit, true, string.format("%s: %.1f calls that set something per frame, at most %d", minimized and "minimized" or "open", sets / 600, limit))
+		Clean(game, "animation")
+	end
+end)
+
 if failures > 0 then
 	print(failures .. " failed")
 	os.exit(1)

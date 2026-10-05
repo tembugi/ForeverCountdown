@@ -176,12 +176,25 @@ end
 function Widget:GetSize()
 	return self:GetWidth(), self:GetHeight()
 end
--- ASSUMED: the panel stays where it was put; only dragging (not tested) reads these.
+-- ASSUMED: the stand-in does no layout; a frame's place on the screen is what a test gives it
+-- (widget.rect = { left, top, right, bottom }, in its own units), else none.
 function Widget:GetLeft()
-	return 0
+	return self.rect and self.rect[1]
 end
 function Widget:GetTop()
-	return 0
+	return self.rect and self.rect[2]
+end
+function Widget:GetRight()
+	return self.rect and self.rect[3]
+end
+function Widget:GetBottom()
+	return self.rect and self.rect[4]
+end
+function Widget:SetScale(scale)
+	self.scale = scale
+end
+function Widget:GetEffectiveScale()
+	return (self.scale or 1) * (self.parent and self.parent:GetEffectiveScale() or 1)
 end
 
 function Widget:CreateTexture(_, layer)
@@ -204,9 +217,23 @@ end
 function Widget:SetTexture(file)
 	self.texture = file
 end
-function Widget:SetAtlas(atlas)
+-- The atlases the addon uses, at their size in UI units (BlizzardInterfaceResources, forever,
+-- Resources/AtlasInfo.lua: interface/questframe/questtracker and interface/minimap/objecticonsatlas).
+local ATLAS_SIZES = {
+	["UI-QuestTracker-Secondary-Objective-Header"] = { 300, 30 },
+	["UI-QuestTrackerButton-Secondary-Collapse"] = { 16, 16 },
+	["UI-QuestTrackerButton-Secondary-Expand"] = { 16, 16 },
+	["UI-QuestTrackerButton-Yellow-Highlight"] = { 16, 16 },
+	QuestNormal = { 64, 64 },
+	QuestTurnin = { 32, 32 },
+}
+function Widget:SetAtlas(atlas, useAtlasSize)
 	self.atlas = atlas
-	return true
+	local size = ATLAS_SIZES[atlas]
+	if useAtlasSize and size then
+		self.width, self.height = size[1], size[2]
+	end
+	return size ~= nil
 end
 function Widget:GetAtlas()
 	return self.atlas
@@ -455,6 +482,11 @@ local function NewGame(now)
 	end
 	UIParent = NewWidget("Frame")
 	UIParent:SetSize(1920, 1080)
+	UIParent.rect = { 0, 1080, 1920, 0 }
+	-- The objective tracker where Edit Mode's preset layouts put it: 110 in from the right, 275
+	-- down (Blizzard_EditMode/Mainline/EditModePresetLayouts.lua), 260 wide.
+	ObjectiveTrackerFrame = NewWidget("Frame", UIParent)
+	ObjectiveTrackerFrame.rect = { 1550, 805, 1810, 400 }
 	MinimapCluster = NewWidget("Frame", UIParent)
 	MinimapCluster:SetSize(256, 256)
 
@@ -503,6 +535,11 @@ local function NewGame(now)
 		self:Fire("PLAYER_LOGIN")
 		self.panel = UIParent.children[#UIParent.children]
 		return self
+	end
+
+	-- Puts a frame somewhere on the screen (see GetLeft), or nowhere.
+	function game:Place(frame, rect)
+		frame.rect = rect
 	end
 
 	function game:Fire(event, ...)

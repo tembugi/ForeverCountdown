@@ -2,7 +2,7 @@
 
 Rules for this addon. The shared rules are in `../AGENTS.md`.
 
-A panel in the objective tracker's style that counts down to World of Warcraft Forever's launch, with the beta's end and name reservation on the way. Agreed with the user on the design canvas (board Z9 with the "Forever launches in" minimized bar, 2026-10-05). Folder, repo and packages are `ForeverCountdown`. No GitHub repo or CurseForge project yet: ask before creating either.
+A panel in the objective tracker's style that counts down to World of Warcraft Forever's launch, with the beta's end and name reservation on the way. Agreed with the user on the design canvas (board Z9 with the "Forever launches in" minimized bar, 2026-10-05). Folder, repo and packages are `ForeverCountdown`. GitHub: `tembugi/ForeverCountdown`, private (created 2026-10-05; public only when the user says, for CurseForge). No CurseForge project yet: the user creates it.
 
 ## Dates
 
@@ -19,7 +19,7 @@ From Blizzard's announcements, in `Countdown.lua`. Everything the player sees is
 ## Look
 
 The tracker's own pieces, read from the game while it runs, with Blizzard's values (from `ObjectiveTrackerModuleHeaderTemplate`) only as fallbacks: the section header's width, height, title offset and button size come from the quest section's header (`QuestObjectiveTracker.Header`, 1.1.0).
-- Width: at least a tracker section's 260, and wide enough for the longest line (the header with its clock and button, or any row's title or line), measured from the texts once they are made. The same width open and minimized (the user asked, 0.1.1). The header is 26 tall with `UI-QuestTracker-Secondary-Objective-Header` art and the section minimize button (`UI-QuestTrackerButton-Secondary-Collapse`/`-Expand`, yellow highlight).
+- Width: at least a tracker section's 260, and wide enough for the longest line (the header with its clock and button, or any row's title or line), measured from the texts once they are made. The same width open and minimized (the user asked, 0.1.1). The header is 26 tall with `UI-QuestTracker-Secondary-Objective-Header` art (at its own 300 width, centered, or stretched to the panel when the panel is wider at large Text Size, 1.1.2) and the section minimize button (`UI-QuestTrackerButton-Secondary-Collapse`/`-Expand`, yellow highlight).
 - Fonts and sizes: the tracker's own font objects as they are, `ObjectiveTrackerHeaderFont` for every header word and `ObjectiveTrackerLineFont` for the rows, so they follow its Text Size setting (Edit Mode swaps the font behind both; the user asked for the tracker's sizes, 0.1.2). The clock figures are 3 larger than the header font. The rows stack by their text's height, and a hook on `ObjectiveTrackerManager.SetTextSize` re-measures the clock, the width and the height on the next frame; colors from `OBJECTIVE_TRACKER_COLOR` (Normal for lines, Complete for what is behind). Titles and the header's gold words use the game's bright gold, `NORMAL_FONT_COLOR` (the tracker's highlight gold): its resting Header gold read too dim in game (the user, 0.1.1).
 - The header reads "Countdown to" (gold) then "Forever", both in the header font.
 - Every "Forever" is white with a pale-blue glow that rises and fades (the word in pale blue a pixel out in eight directions behind it; the game's outlines are always black). A gleam sweeping across the word was dropped after the user saw it in game (0.1.1).
@@ -42,8 +42,8 @@ The infinity sign standing as an hourglass, white (shaded to soft silver), drawn
 
 ## Behavior
 
-- The panel can be dragged by its header anywhere on the screen; the place is saved. Until it is moved, it sits left of the minimap.
-- One OnUpdate drives everything that moves, and the game runs it only while the panel is shown. The texts change once a second. Nothing else runs.
+- The panel can be dragged by its header anywhere on the screen; the place is saved. Until it is moved, it mirrors the objective tracker on the left of the screen: as far in from the left edge as the tracker is from the right, level with its top, read from the tracker's place in the game and followed once a second (the user asked, 1.1.2; left of the minimap it covered the default buffs). Before the tracker has a place, Blizzard's preset one (110 in, 275 down).
+- One OnUpdate drives everything that moves, and the game runs it only while the panel is shown. The texts change once a second. Nothing else runs. It sets only what changes from frame to frame (the light's sizes and brightness, the ink), and minimized only the header's glow and the clock; a test holds it to that (1.1.2: about 89 calls a frame open in the stand-in, down from 162).
 - No slash commands, options or tooltips (none asked for).
 
 ## Tests
