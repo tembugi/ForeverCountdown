@@ -1,3 +1,7 @@
+## v1.1.9
+
+- The minimize button is the quest tracker's own.
+
 ## v1.1.8
 
 - The addon's icon has a gold ring.

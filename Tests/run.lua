@@ -507,6 +507,22 @@ Test("at the real launch the panel reads as the user saw it in game in the launc
 	Clean(game, "launch")
 end)
 
+Test("the minimize button is the tracker's own, or made like it when the tracker is missing", function()
+	local game = Panel(Utc(2026, 10, 5, 12))
+	local button = MinimizeButton(game)
+	Equal(button.template, "ObjectiveTrackerModuleMinimizeButtonTemplate", "the tracker's template")
+	Equal(button:GetWidth(), 16, "its size")
+	game = NewGame(Utc(2026, 10, 5, 12))
+	game.templates = {}
+	game:Load():Frames(2)
+	button = MinimizeButton(game)
+	Equal(button.template, nil, "no template")
+	Equal(button:GetWidth() .. " " .. button.normal.atlas .. " " .. button.highlight.atlas, "16 UI-QuestTrackerButton-Secondary-Collapse UI-QuestTrackerButton-Yellow-Highlight", "made like it")
+	button:Click()
+	Equal(button.normal.atlas, "UI-QuestTrackerButton-Secondary-Expand", "minimized")
+	Clean(game, "fallback button")
+end)
+
 if failures > 0 then
 	print(failures .. " failed")
 	os.exit(1)

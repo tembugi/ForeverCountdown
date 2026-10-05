@@ -219,17 +219,20 @@ function Widget:SetTexture(file)
 end
 -- The atlases the addon uses, at their size in UI units (BlizzardInterfaceResources, forever,
 -- Resources/AtlasInfo.lua: interface/questframe/questtracker and interface/minimap/objecticonsatlas).
+-- The game finds an atlas whatever the case of its name (Blizzard's own files spell these both ways).
 local ATLAS_SIZES = {
-	["UI-QuestTracker-Secondary-Objective-Header"] = { 300, 30 },
-	["UI-QuestTrackerButton-Secondary-Collapse"] = { 16, 16 },
-	["UI-QuestTrackerButton-Secondary-Expand"] = { 16, 16 },
-	["UI-QuestTrackerButton-Yellow-Highlight"] = { 16, 16 },
-	QuestNormal = { 64, 64 },
-	QuestTurnin = { 32, 32 },
+	["ui-questtracker-secondary-objective-header"] = { 300, 30 },
+	["ui-questtrackerbutton-secondary-collapse"] = { 16, 16 },
+	["ui-questtrackerbutton-secondary-collapse-pressed"] = { 16, 16 },
+	["ui-questtrackerbutton-secondary-expand"] = { 16, 16 },
+	["ui-questtrackerbutton-secondary-expand-pressed"] = { 16, 16 },
+	["ui-questtrackerbutton-yellow-highlight"] = { 16, 16 },
+	questnormal = { 64, 64 },
+	questturnin = { 32, 32 },
 }
 function Widget:SetAtlas(atlas, useAtlasSize)
 	self.atlas = atlas
-	local size = ATLAS_SIZES[atlas]
+	local size = ATLAS_SIZES[atlas:lower()]
 	if useAtlasSize and size then
 		self.width, self.height = size[1], size[2]
 	end
@@ -476,9 +479,34 @@ local function NewGame(now)
 		EventUtil.RegisterOnceFrameEventAndCallback("PLAYER_LOGIN", callback)
 	end
 
+	-- The templates the addon uses, as Blizzard_ObjectiveTracker/Blizzard_ObjectiveTrackerModule.xml
+	-- has them; the tracker loads before the addon (## OptionalDeps).
+	local TEMPLATES = {
+		ObjectiveTrackerModuleMinimizeButtonTemplate = function(button)
+			button.smartNavigationIgnored = true
+			button:SetSize(16, 16)
+			for _, part in ipairs({ { "normal", "ui-questtrackerbutton-secondary-collapse" }, { "pushed", "ui-questtrackerbutton-secondary-collapse-pressed" }, { "highlight", "ui-questtrackerbutton-yellow-highlight" } }) do
+				local texture = NewWidget("Texture", button)
+				texture:SetAtlas(part[2], true)
+				button[part[1]] = texture
+			end
+		end,
+	}
+	game.templates = TEMPLATES
+	C_XMLUtil = {
+		GetTemplateInfo = function(name)
+			if game.templates[name] then
+				return { type = "Button", width = 16, height = 16 }
+			end
+		end,
+	}
 	function CreateFrame(frameType, _, parent, template)
-		assert(template == nil, "the stand-in has no templates")
-		return NewWidget(frameType, parent)
+		local frame = NewWidget(frameType, parent)
+		if template then
+			frame.template = template
+			assert(game.templates[template], "no such template in the stand-in: " .. template)(frame)
+		end
+		return frame
 	end
 	UIParent = NewWidget("Frame")
 	UIParent:SetSize(1920, 1080)
@@ -487,8 +515,6 @@ local function NewGame(now)
 	-- down (Blizzard_EditMode/Mainline/EditModePresetLayouts.lua), 260 wide.
 	ObjectiveTrackerFrame = NewWidget("Frame", UIParent)
 	ObjectiveTrackerFrame.rect = { 1550, 805, 1810, 400 }
-	MinimapCluster = NewWidget("Frame", UIParent)
-	MinimapCluster:SetSize(256, 256)
 
 	-- The tracker: its fonts, a size per Text Size step (Blizzard_ObjectiveTrackerFonts.xml,
 	-- roman), the quest section's header (ObjectiveTrackerModuleHeaderTemplate) and SetTextSize.

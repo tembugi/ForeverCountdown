@@ -4,16 +4,17 @@
 local ADDON_NAME, ns = ...
 
 -- Keep equal to ## Version in the .toc.
-local VERSION = "1.1.8"
+local VERSION = "1.1.9"
 ns.VERSION = VERSION
 -- The addon's name as the player sees it: the start of chat lines.
 local ADDON_TITLE = "Forever Countdown"
 
 local T = ns.TEXT
 
--- The tracker's section header: its width, height, the title's offset and the minimize button's
--- size, read from the game's own quest section header (ReadTrackerSizes). These are Blizzard's
--- values (ObjectiveTrackerModuleHeaderTemplate), used when the game's header is missing.
+-- The tracker's section header: its width, height and the title's offset, read from the game's own
+-- quest section header (ReadTrackerSizes), and its minimize button, made from the game's own
+-- template. These are Blizzard's values (ObjectiveTrackerModuleHeaderTemplate and its button),
+-- used when the game's header or template is missing.
 local HEADER_WIDTH = 260
 local HEADER_HEIGHT = 26
 local HEADER_TEXT_X = 7
@@ -22,6 +23,7 @@ local COLLAPSE_ART = "UI-QuestTrackerButton-Secondary-Collapse"
 local EXPAND_ART = "UI-QuestTrackerButton-Secondary-Expand"
 local BUTTON_HIGHLIGHT_ART = "UI-QuestTrackerButton-Yellow-Highlight"
 local BUTTON_SIZE = 16
+local MINIMIZE_TEMPLATE = "ObjectiveTrackerModuleMinimizeButtonTemplate"
 local MINIMIZE_SOUND = SOUNDKIT and SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON -- the tracker's own
 -- The game's quest marker art: "!" for a quest to pick up, "?" for one to hand in.
 local QUEST_AVAILABLE_ART = "QuestNormal"
@@ -77,9 +79,20 @@ local function ReadTrackerSizes()
 	if header.Text then
 		HEADER_TEXT_X = Positive(select(4, header.Text:GetPoint(1)), HEADER_TEXT_X)
 	end
-	if header.MinimizeButton then
-		BUTTON_SIZE = Positive(header.MinimizeButton:GetWidth(), BUTTON_SIZE)
+end
+
+-- The tracker's own minimize button, from its template (its size, art and highlight), or one
+-- made with the template's values when the tracker isn't loaded.
+local function CreateMinimizeButton(parent)
+	if C_XMLUtil and C_XMLUtil.GetTemplateInfo(MINIMIZE_TEMPLATE) then
+		return CreateFrame("Button", nil, parent, MINIMIZE_TEMPLATE)
 	end
+	local button = CreateFrame("Button", nil, parent)
+	button:SetSize(BUTTON_SIZE, BUTTON_SIZE)
+	button:SetNormalAtlas(COLLAPSE_ART)
+	button:SetPushedAtlas(COLLAPSE_ART .. "-Pressed")
+	button:SetHighlightAtlas(BUTTON_HIGHLIGHT_ART, "ADD")
+	return button
 end
 
 -- A text in one of the game's fonts. Without a size it keeps the font object itself, so it
@@ -568,9 +581,10 @@ end
 local function SetMinimized(minimized)
 	saved.minimized = minimized
 	panel.body:SetAlpha(minimized and 0 or 1)
+	-- As the tracker's header sets its own button (ObjectiveTrackerModuleHeaderMixin:SetCollapsed).
 	local art = minimized and EXPAND_ART or COLLAPSE_ART
-	panel.button:GetNormalTexture():SetAtlas(art)
-	panel.button:GetPushedTexture():SetAtlas(art .. "-Pressed")
+	panel.button:GetNormalTexture():SetAtlas(art, true)
+	panel.button:GetPushedTexture():SetAtlas(art .. "-Pressed", true)
 	panel:SetHeight(minimized and HEADER_HEIGHT or panel.openHeight or HEADER_HEIGHT)
 end
 
@@ -792,12 +806,9 @@ local function Build()
 	-- beside "Forever launches" while open).
 	clock = CreateClock(full, headerFont)
 
-	local button = CreateFrame("Button", nil, header)
-	button:SetSize(BUTTON_SIZE, BUTTON_SIZE)
+	local button = CreateMinimizeButton(header)
+	BUTTON_SIZE = Positive(button:GetWidth(), BUTTON_SIZE)
 	button:SetPoint("RIGHT", 1, 0)
-	button:SetNormalAtlas(COLLAPSE_ART)
-	button:SetPushedAtlas(COLLAPSE_ART .. "-Pressed")
-	button:SetHighlightAtlas(BUTTON_HIGHLIGHT_ART, "ADD")
 	button:SetScript("OnClick", function()
 		if MINIMIZE_SOUND then
 			PlaySound(MINIMIZE_SOUND)
