@@ -5,99 +5,11 @@
 -- which the game doesn't have.
 ---@diagnostic disable: undefined-global, lowercase-global
 
--- What Countdown.lua uses from the game, as the game has it: `date` is standard Lua's os.date
--- (the game's own copy of it), and the strings are the game's enUS ones
--- (BlizzardInterfaceResources, forever branch, GlobalStrings/enUS.lua). To test players in
--- different time zones, `date` reads local times at a fixed offset from UTC (InZone); os.date
--- does the same for the computer's own zone. "!" formats are UTC either way.
-local zoneOffset = 0
-date = function(format, moment)
-	if format:sub(1, 1) == "!" then
-		return os.date(format, moment)
-	end
-	return os.date("!" .. format, (moment or os.time()) + zoneOffset * 3600)
-end
-local function InZone(hours, func)
-	local before = zoneOffset
-	zoneOffset = hours
-	local ok, problem = pcall(func)
-	zoneOffset = before
-	if not ok then
-		error(problem, 0)
-	end
-end
-D_DAYS = "%d |4Day:Days;"
-TIME_TWELVEHOURAM = "%d:%02d AM"
-TIME_TWELVEHOURPM = "%d:%02d PM"
-TIMEMANAGER_TICKER_12HOUR = "%d:%02d"
-TIMEMANAGER_TICKER_24HOUR = "%02d:%02d"
-CURRENCY_TRANSFER_LOG_TIME_FORMAT = "%s ago"
-FULLDATE = "%1$s, %2$s %3$d %4$d"
-EVENT_SCHEDULER_DAY_FORMAT = "%1$s %2$d"
-for i, name in ipairs({ "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December" }) do
-	_G["FULLDATE_MONTH_" .. name:upper()] = name
-end
-for _, name in ipairs({ "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday" }) do
-	_G["WEEKDAY_" .. name:upper()] = name
-end
+-- The stand-in for the game takes over print for the addon's chat lines; the tests write with this.
+local print = print
 
--- The game's format takes numbered placeholders ("%1$s", as Blizzard's calendar formats FULLDATE
--- with format); standard Lua's doesn't, so this puts the arguments in the order they ask for.
-local plainFormat = string.format
-string.format = function(text, ...)
-	if not text:find("%%%d+%$") then
-		return plainFormat(text, ...)
-	end
-	local args, ordered = { ... }, {}
-	local converted = text:gsub("%%(%d+)%$", function(n)
-		ordered[#ordered + 1] = args[tonumber(n)]
-		return "%"
-	end)
-	return plainFormat(converted, unpack(ordered))
-end
-
--- The game's clock setting and its time formatter, copied from wow-ui-source (forever,
--- Blizzard_FrameXMLUtil/GameTimeUtil.lua).
-local militaryTime = false
-function GetCVarBool(name)
-	if name == "timeMgrUseMilitaryTime" then
-		return militaryTime
-	end
-end
-function GameTime_GetFormattedTime(hour, minute, wantAMPM)
-	if ( GetCVarBool("timeMgrUseMilitaryTime") ) then
-		return format(TIMEMANAGER_TICKER_24HOUR, hour, minute);
-	else
-		if ( wantAMPM ) then
-			local timeFormat = TIME_TWELVEHOURAM;
-			if ( hour == 0 ) then
-				hour = 12;
-			elseif ( hour == 12 ) then
-				timeFormat = TIME_TWELVEHOURPM;
-			elseif ( hour > 12 ) then
-				timeFormat = TIME_TWELVEHOURPM;
-				hour = hour - 12;
-			end
-			return format(timeFormat, hour, minute);
-		else
-			if ( hour == 0 ) then
-				hour = 12;
-			elseif ( hour > 12 ) then
-				hour = hour - 12;
-			end
-			return format(TIMEMANAGER_TICKER_12HOUR, hour, minute);
-		end
-	end
-end
-format = string.format
-local function WithClock(twentyFourHours, func)
-	militaryTime = twentyFourHours
-	local ok, problem = pcall(func)
-	militaryTime = false
-	if not ok then
-		error(problem, 0)
-	end
-end
+local stubs = dofile("Tests/game.lua")
+local InZone, WithClock = stubs.InZone, stubs.WithClock
 
 local ns = {}
 assert(loadfile("Countdown.lua"))("ForeverCountdown", ns)
@@ -215,16 +127,46 @@ Test("name reservation: starts until October 27 (Today on the day), then ends wi
 	Equal(lines.reservation.done, true, "done the day after")
 end)
 
-Test("the clock counts days, hours, minutes and seconds to the launch, then stops", function()
+Test("the clock counts days, hours, minutes and seconds to the launch, then stays at zeros", function()
 	local left = 31 * DAY + 2 * HOUR + 3 * 60 + 4
 	local d, h, m, s = ns.ClockParts(ns.LAUNCH - left)
 	Equal(string.format("%d %d %d %d", d, h, m, s), "31 2 3 4", "31 days 2:03:04 before")
 	d, h, m, s = ns.ClockParts(ns.LAUNCH - 1)
 	Equal(string.format("%d %d %d %d", d, h, m, s), "0 0 0 1", "one second before")
-	Equal(ns.ClockParts(ns.LAUNCH), nil, "at launch")
-	Equal(ns.ClockParts(ns.LAUNCH + 60), nil, "after launch")
+	for _, after in ipairs({ 0, 60, 30 * DAY }) do
+		d, h, m, s = ns.ClockParts(ns.LAUNCH + after)
+		Equal(string.format("%d %d %d %d", d, h, m, s), "0 0 0 0", after .. " seconds after launch")
+	end
 	Equal(ns.Lines(ns.LAUNCH - 1).launched, false, "not launched a second before")
 	Equal(ns.Lines(ns.LAUNCH).launched, true, "launched at launch")
+end)
+
+Test("the launch line: the moment before, then the launch's own date and how many days ago", function()
+	InZone(2, function()
+		local lines = ns.Lines(ns.LAUNCH - 1)
+		Equal(lines.launch.title, "launches", "Helsinki, a second before")
+		Equal(lines.launch.line, ns.LaunchText(), "Helsinki, a second before")
+		Equal(lines.launch.done, false, "not done before")
+		lines = ns.Lines(ns.LAUNCH)
+		Equal(lines.launch.title, "launched", "Helsinki, at launch")
+		-- 01:00 on November 5 in Helsinki: the launch is today there, on the 5th.
+		Equal(lines.launch.line, "November 5 · Today", "Helsinki, at launch")
+		Equal(lines.launch.done, true, "done at launch")
+		Equal(ns.Lines(Utc(2026, 11, 6, 22)).launch.line, "November 5 · " .. D_DAYS:format(2) .. " ago", "Helsinki, two days later")
+	end)
+	InZone(-8, function()
+		Equal(ns.Lines(ns.LAUNCH + 3600).launch.line, "November 4 · Today", "California, an hour after")
+		Equal(ns.Lines(ns.LAUNCH + 9 * 3600).launch.line, "November 4 · " .. D_DAYS:format(1) .. " ago", "California, the next morning")
+	end)
+end)
+
+Test("after the launch every milestone is behind", function()
+	local lines = ns.Lines(ns.LAUNCH + 2 * DAY)
+	for _, key in ipairs({ "betaBegan", "betaEnds", "reservation", "launch" }) do
+		Equal(lines[key].done, true, key)
+	end
+	Equal(lines.betaEnds.title, "Beta ended", "beta")
+	Equal(lines.reservation.title, "Name reservation ended", "reservation")
 end)
 
 Test("a moment reads as the game writes a date and a time, with its 24-hour or 12-hour clock", function()
@@ -314,6 +256,177 @@ Test("NormalizeSaved drops broken entries", function()
 		Equal(ns.NormalizeSaved({ format = ns.SAVE_FORMAT, position = position }).position, nil, "broken position " .. i)
 	end
 	Equal(ns.NormalizeSaved({ format = ns.SAVE_FORMAT, minimized = "yes" }).minimized, false, "minimized that isn't true")
+end)
+
+--------------------------------------------------------------------------------
+-- The panel, in the stand-in for the game (Tests/standin.lua), frame by frame.
+--------------------------------------------------------------------------------
+
+local NewGame = dofile("Tests/standin.lua")
+local INFINITY_ART = "Interface\\AddOns\\ForeverCountdown\\Infinity"
+local DISC = "Interface\\CharacterFrame\\TempPortraitAlphaMask"
+local LAUNCH = ns.LAUNCH
+
+local function Panel(now, saved)
+	return NewGame(now):Load(saved):Frames(2)
+end
+
+local function Clean(game, what)
+	Equal(#game.errors, 0, what .. ": errors (" .. tostring(game.errors[1]) .. ")")
+	Equal(#game.chat, 0, what .. ": chat lines (" .. tostring(game.chat[1]) .. ")")
+end
+
+local function Has(game, text, what)
+	if not game:Find(text) then
+		error(what .. ": no \"" .. text .. "\" in: " .. game:Read(), 2)
+	end
+	return game:Find(text)
+end
+
+local function Grey(widget, what)
+	local r, g, b = widget:GetTextColor()
+	Equal(string.format("%.2f %.2f %.2f", r, g, b), "0.60 0.60 0.60", what .. " greyed")
+end
+
+local function Count(game, test)
+	local n = 0
+	for _, widget in ipairs(game.widgets) do
+		if test(widget) then
+			n = n + 1
+		end
+	end
+	return n
+end
+
+-- The two infinity signs: their art, and the light's discs drawn over each.
+local function InfinitySigns(game)
+	local signs = {}
+	for _, widget in ipairs(game.widgets) do
+		if widget.texture == INFINITY_ART then
+			local discs = {}
+			for _, child in ipairs(widget.parent.children) do
+				if child.texture == DISC then
+					discs[#discs + 1] = child
+				end
+			end
+			signs[#signs + 1] = { art = widget, discs = discs }
+		end
+	end
+	return signs
+end
+
+local function MinimizeButton(game)
+	for _, widget in ipairs(game.widgets) do
+		if widget.widgetType == "Button" and widget.normal then
+			return widget
+		end
+	end
+end
+
+Test("the panel before the launch: the milestones, the clock, no last line", function()
+	local game = Panel(Utc(2026, 10, 5, 12))
+	Clean(game, "before")
+	Has(game, "Countdown to", "header")
+	Has(game, "- September 17 · 18 Days ago", "beta began")
+	Has(game, "Beta ends", "beta")
+	Has(game, "- October 21 · in 16 Days", "beta")
+	Has(game, "Name reservation starts", "reservation")
+	Has(game, "launches", "launch")
+	Has(game, "30", "days on the clock")
+	Equal(game:Find("Welcome to"), nil, "no welcome before the launch")
+	for _, sign in ipairs(InfinitySigns(game)) do
+		if sign.art:IsVisible() then
+			Equal(sign.art:IsDesaturated(), false, "the visible sign is lit")
+		end
+	end
+	Equal(game.panel:GetWidth() >= 260, true, "at least a tracker section wide")
+end)
+
+Test("at the launch everything greys, the clock stays at zeros and the last line welcomes the player", function()
+	local game = Panel(LAUNCH - 2)
+	local before = game.panel:GetHeight()
+	game:Frames(240, 4)
+	Clean(game, "after")
+	for _, title in ipairs({ "Beta began", "Beta ended", "Name reservation ended", "launched" }) do
+		Grey(Has(game, title, "after"), title)
+	end
+	Grey(Has(game, "- November 4 · Today", "launch line (UTC)"), "the launch line")
+	Equal(Count(game, function(w) return w.widgetType == "FontString" and w:IsVisible() and w.text == "00" end), 4, "the clock's zeros")
+	Has(game, "Welcome to", "welcome")
+	Has(game, "!", "welcome")
+	Equal(game.panel:GetHeight() > before, true, "the panel grows by the last line")
+	local welcome = 0
+	for _, text in ipairs({ "Welcome to", "!" }) do
+		welcome = welcome + game:Find(text):GetStringWidth()
+	end
+	Equal(game.panel:GetWidth() >= welcome + 33, true, "wide enough for the last line")
+	-- "Forever" glows in the header and the last line; the launch row's is grey without glow.
+	local glowing = Count(game, function(w) return w.layer == "BACKGROUND" and w:IsVisible() and w.text == "Forever" end)
+	Equal(glowing, 16, "glowing copies of Forever")
+	-- The sign by "Forever launched" is greyed and still; the one by the last line is lit.
+	local signs = InfinitySigns(game)
+	Equal(#signs, 2, "two signs")
+	local greyed, lit = signs[1], signs[2]
+	Equal(greyed.art:IsDesaturated(), true, "the launch row's sign is greyed")
+	for _, disc in ipairs(greyed.discs) do
+		Equal(disc:IsShown(), false, "no light on the greyed sign")
+	end
+	Equal(lit.art:IsDesaturated() or not lit.art:IsVisible(), false, "the last line's sign is lit")
+	local x1 = select(4, lit.discs[1]:GetPoint())
+	game:Frames(3)
+	Equal(select(4, lit.discs[1]:GetPoint()) ~= x1, true, "its light moves")
+	-- The quill rests, greyed.
+	local quillDiscs = Count(game, function(w) return w.texture == DISC and w.parent and w.parent.texture == nil and not w.calls.SetBlendMode and (w.color and w.color[1] ~= w.color[3]) end)
+	Equal(quillDiscs, 0, "no gold left on the quill")
+end)
+
+Test("a reload after the launch shows the launched panel at once", function()
+	local game = Panel(LAUNCH + 86400)
+	Clean(game, "reload")
+	Has(game, "Welcome to", "reload")
+	Has(game, "- November 4 · 1 Day ago", "reload")
+	local open = NewGame(LAUNCH - 86400):Load():Frames(2).panel:GetHeight()
+	Equal(game.panel:GetHeight() > open, true, "taller than before the launch")
+end)
+
+Test("the minimize button clicks like the tracker's own and keeps only the header", function()
+	local game = Panel(Utc(2026, 10, 5, 12))
+	local open = game.panel:GetHeight()
+	local button = MinimizeButton(game)
+	button:Click()
+	Equal(game.sounds[1], 856, "the tracker's click sound")
+	Equal(game.panel:GetHeight(), 26, "only the header")
+	Equal(button.normal.atlas, "UI-QuestTrackerButton-Secondary-Expand", "the expand art")
+	button:Click()
+	Equal(game.panel:GetHeight(), open, "open again")
+	Equal(ForeverCountdownDB.minimized, false, "saved open")
+	Clean(game, "minimize")
+end)
+
+Test("the tracker's Text Size: the clock stays 3 larger than the header, the panel widens", function()
+	local game = Panel(Utc(2026, 10, 5, 12))
+	local width = game.panel:GetWidth()
+	ObjectiveTrackerManager:SetTextSize(16)
+	game:Frames(2)
+	local sizes = {}
+	for _, widget in ipairs(game.widgets) do
+		if widget.widgetType == "FontString" and widget.font then
+			sizes[widget.font[2]] = true
+		end
+	end
+	Equal(sizes[21] and sizes[25], true, "figures 18 + 3 and colons 4 larger")
+	Equal(game.panel:GetWidth() > width, true, "wider with the larger text")
+	Clean(game, "text size")
+end)
+
+Test("the panel takes its sizes from the tracker's own header", function()
+	local game = NewGame(Utc(2026, 10, 5, 12))
+	QuestObjectiveTracker.Header:SetSize(400, 30)
+	game:Load():Frames(2)
+	Equal(game.panel:GetWidth() >= 400, true, "a section's width")
+	MinimizeButton(game):Click()
+	Equal(game.panel:GetHeight(), 30, "a section header's height")
+	Clean(game, "sizes")
 end)
 
 if failures > 0 then

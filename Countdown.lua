@@ -52,8 +52,9 @@ ns.TEXT = {
 	reservationEnded = "Name reservation ended",
 	launches = "launches",
 	launched = "launched",
-	today = "Today",
-	inDays = "in %s", -- the game has no string of its own for this
+	welcomeTo = "Welcome to", -- then "Forever" and "!", the last line once Forever has launched
+	welcomeEnd = "!",
+	inDays = "in %s",
 }
 
 -- Month and weekday names are the game's own, in the player's language (the global strings
@@ -82,26 +83,29 @@ local function DaysUntil(civilDay, now)
 end
 ns.DaysUntil = DaysUntil
 
--- "Oct 27 · in 22 Days" before the day (the user asked, 0.1.16), "Oct 21 · Today" on it, and
--- "Sep 17 · 18 Days ago" once it has passed (the user asked, 0.1.15). D_DAYS is the game's own "%d |4Day:Days;" (the game picks the singular or
--- plural when it shows it), and "%s ago" is the game's own too.
+-- "October 27 · in 22 Days" before the day (the user asked, 0.1.16), "October 21 · Today" on it,
+-- and "September 17 · 18 Days ago" once it has passed (the user asked, 0.1.15). D_DAYS is the
+-- game's own "%d |4Day:Days;" (the game picks the singular or plural when it shows it); "Today"
+-- is the word the game's calendar writes for an event on the current day; "%s ago" is the
+-- game's own too.
 local function DayLine(civilDay, now)
 	local days = DaysUntil(civilDay, now)
 	local text = DayText(civilDay)
 	if days > 0 then
 		return text .. " · " .. ns.TEXT.inDays:format(D_DAYS:format(days))
 	elseif days == 0 then
-		return text .. " · " .. ns.TEXT.today
+		return text .. " · " .. COMMUNITIES_CALENDAR_TODAY
 	end
 	return text .. " · " .. (CURRENCY_TRANSFER_LOG_TIME_FORMAT or "%s ago"):format(D_DAYS:format(-days))
 end
 ns.DayLine = DayLine
 
--- Days, hours, minutes and seconds left to launch, or nil once Forever has launched.
+-- Days, hours, minutes and seconds left to launch. Once Forever has launched the clock stays at
+-- zeros (the user asked, 1.1.0).
 function ns.ClockParts(now)
 	local left = ns.LAUNCH - now
 	if left <= 0 then
-		return nil
+		return 0, 0, 0, 0
 	end
 	local days = math.floor(left / DAY)
 	local hours = math.floor(left / HOUR) % 24
@@ -124,8 +128,15 @@ function ns.LaunchText()
 	return ns.FormatMoment(date("*t", ns.LAUNCH))
 end
 
+-- Whether Forever has launched at a moment.
+function ns.HasLaunched(now)
+	return now >= ns.LAUNCH
+end
+
 -- What each line of the panel says at a moment: a title, the line under it, and whether the
--- milestone is behind (shown greyed like a finished quest line).
+-- milestone is behind (shown greyed like a finished quest line). Before the launch its line is
+-- the launch moment in the player's own time; after it, the launch's own local date with how
+-- many days ago, like the others (the user chose this, 1.1.0).
 function ns.Lines(now)
 	local T = ns.TEXT
 	local lines = {}
@@ -140,7 +151,13 @@ function ns.Lines(now)
 	else
 		lines.reservation = { title = T.reservationEnded, line = DayLine(ns.RESERVATION_END, now), done = true }
 	end
-	lines.launched = ns.ClockParts(now) == nil
+	local launched = ns.HasLaunched(now)
+	lines.launched = launched
+	if launched then
+		lines.launch = { title = T.launched, line = DayLine(LocalDay(ns.LAUNCH), now), done = true }
+	else
+		lines.launch = { title = T.launches, line = ns.LaunchText(), done = false }
+	end
 	return lines
 end
 

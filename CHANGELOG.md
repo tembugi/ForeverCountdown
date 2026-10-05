@@ -1,3 +1,9 @@
+## v1.1.0
+
+- When Forever launches, the clock stays at zeros, every line turns grey and says how many days ago, and a last line says "Welcome to Forever!".
+- The minimize button clicks like the quest tracker's.
+- "Today" is in your game's language.
+
 ## v1.0.1
 
 - Dates and times are written the way the game writes them, with its month and weekday names and its clock format.

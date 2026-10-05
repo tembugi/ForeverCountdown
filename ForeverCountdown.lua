@@ -4,15 +4,16 @@
 local ADDON_NAME, ns = ...
 
 -- Keep equal to ## Version in the .toc.
-local VERSION = "1.0.1"
+local VERSION = "1.1.0"
 ns.VERSION = VERSION
 -- The addon's name as the player sees it: the start of chat lines.
 local ADDON_TITLE = "Forever Countdown"
 
 local T = ns.TEXT
 
--- Blizzard's values (ObjectiveTrackerModuleHeaderTemplate and its minimize button), used only
--- when the game's own objects are missing.
+-- The tracker's section header: its width, height, the title's offset and the minimize button's
+-- size, read from the game's own quest section header (ReadTrackerSizes). These are Blizzard's
+-- values (ObjectiveTrackerModuleHeaderTemplate), used when the game's header is missing.
 local HEADER_WIDTH = 260
 local HEADER_HEIGHT = 26
 local HEADER_TEXT_X = 7
@@ -21,6 +22,7 @@ local COLLAPSE_ART = "UI-QuestTrackerButton-Secondary-Collapse"
 local EXPAND_ART = "UI-QuestTrackerButton-Secondary-Expand"
 local BUTTON_HIGHLIGHT_ART = "UI-QuestTrackerButton-Yellow-Highlight"
 local BUTTON_SIZE = 16
+local MINIMIZE_SOUND = SOUNDKIT and SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON -- the tracker's own
 -- The game's quest marker art: "!" for a quest to pick up, "?" for one to hand in.
 local QUEST_AVAILABLE_ART = "QuestNormal"
 local QUEST_TURN_IN_ART = "QuestTurnin"
@@ -48,6 +50,8 @@ end
 local GOLD = NORMAL_FONT_COLOR
 local WHITE = HIGHLIGHT_FONT_COLOR
 local GLOW = { 0.67, 0.84, 1 }
+-- Art that is behind, greyed as the game greys a quest marker: desaturated and dimmed.
+local GREYED = 0.75
 
 -- Every chat line starts with the addon's name in gold. The addon writes to chat only when
 -- something stopped working: what stopped, in red, then what the player can do.
@@ -57,6 +61,25 @@ end
 
 local function Font(objectName, fallbackName)
 	return _G[objectName] or _G[fallbackName]
+end
+
+local function Positive(value, fallback)
+	return type(value) == "number" and value > 0 and value or fallback
+end
+
+local function ReadTrackerSizes()
+	local header = QuestObjectiveTracker and QuestObjectiveTracker.Header
+	if not header then
+		return
+	end
+	HEADER_WIDTH = Positive(header:GetWidth(), HEADER_WIDTH)
+	HEADER_HEIGHT = Positive(header:GetHeight(), HEADER_HEIGHT)
+	if header.Text then
+		HEADER_TEXT_X = Positive(select(4, header.Text:GetPoint(1)), HEADER_TEXT_X)
+	end
+	if header.MinimizeButton then
+		BUTTON_SIZE = Positive(header.MinimizeButton:GetWidth(), BUTTON_SIZE)
+	end
 end
 
 -- A text in one of the game's fonts. Without a size it keeps the font object itself, so it
@@ -127,6 +150,7 @@ local function CreateInfinity(parent, width)
 	local frame = CreateFrame("Frame", nil, parent)
 	frame:SetSize(width, height)
 	local art = frame:CreateTexture(nil, "ARTWORK")
+	frame.art = art
 	art:SetTexture(INFINITY_ART)
 	art:SetSize(width * ART_WIDTH, width * ART_HEIGHT)
 	art:SetPoint("CENTER")
@@ -161,6 +185,18 @@ local function CreateInfinity(parent, width)
 	return frame
 end
 
+-- An infinity sign lit (silver, its light running) or behind (greyed and still, like the "!").
+local function SetInfinityLit(frame, lit)
+	frame.lit = lit
+	frame.art:SetDesaturated(not lit)
+	local shade = lit and 1 or GREYED
+	frame.art:SetVertexColor(shade, shade, shade)
+	for k, core in ipairs(frame.trace) do
+		core:SetShown(lit)
+		frame.halo[k]:SetShown(lit)
+	end
+end
+
 -- The quill, drawn in gold: the shaft, the edge of the vane and the nib. It writes a line of
 -- ink under itself (see Animate).
 local function Bezier(p0, p1, p2, p3, steps)
@@ -192,9 +228,11 @@ local function CreateQuill(parent, size)
 		end
 		return out
 	end
+	frame.discs = {}
 	local function Stroke(target, points, thickness, list)
 		for _, p in ipairs(Along(Scaled(points, scale), thickness / 3)) do
 			local disc = Disc(target, "ARTWORK", 0, p[1], p[2], thickness, r, g, b)
+			frame.discs[#frame.discs + 1] = disc
 			if list then
 				list[#list + 1] = disc
 			end
@@ -210,6 +248,26 @@ local function CreateQuill(parent, size)
 		disc:SetAlpha(0)
 	end
 	return frame
+end
+
+-- Once name reservation is over the quill rests, its line written, greyed like the "!".
+local function SetQuillDone(quill, done)
+	if quill.done == done then
+		return
+	end
+	quill.done = done
+	local r, g, b = GOLD.r, GOLD.g, GOLD.b
+	if done then
+		local grey = GREYED * (0.299 * r + 0.587 * g + 0.114 * b)
+		r, g, b = grey, grey, grey
+	end
+	for _, disc in ipairs(quill.discs) do
+		disc:SetVertexColor(r, g, b)
+	end
+	quill.pen:SetPoint("TOPLEFT")
+	for _, ink in ipairs(quill.ink) do
+		ink:SetAlpha(done and 1 or 0)
+	end
 end
 
 -- "Forever" in white, the way the logo has it, with a soft pale-blue glow that rises and fades
@@ -231,6 +289,19 @@ local function CreateShiningWord(parent, fontObject)
 		glow[i] = copy
 	end
 	return { word = word, glow = glow }
+end
+
+-- A "Forever" that is behind turns grey like the rest of its line, without the glow.
+local function SetShiningDone(shine, done)
+	shine.done = done
+	if done then
+		shine.word:SetTextColor(TrackerColor("Complete", 0.6, 0.6, 0.6))
+	else
+		shine.word:SetTextColor(WHITE.r, WHITE.g, WHITE.b)
+	end
+	for _, copy in ipairs(shine.glow) do
+		copy:SetShown(not done)
+	end
 end
 
 -- The countdown: days, hours, minutes and seconds in bold white (the tracker's header font with
@@ -309,10 +380,15 @@ local panel
 local saved
 local rows = {}
 local shining = {}
-local quill, infinity, turnInMarker, turnInWiggle
+local quill, turnInMarker, turnInWiggle
+local launchInfinity, welcomeInfinity -- the signs by "Forever launches" and "Welcome to Forever!"
+local infinity -- the lit one of the two, whose light runs (see Animate)
 local headerFont, lineFont -- the tracker's own font objects
-local launchRest -- "launches" after the shining "Forever" in the launch row
+local launchWord -- the shining "Forever" in the launch row
+local launchRest -- "launches" after it
 local launchWordText -- "Forever" in the launch row
+local welcomeTexts -- "Welcome to", "Forever" and "!" in the last row, once Forever has launched
+local shownLaunched -- whether the panel shows Forever as launched
 local titleWidthTexts -- the header's "Countdown to" and "Forever"
 local clock -- the timer, in the header after the title
 
@@ -326,6 +402,13 @@ local function FitWidth()
 	local headerLine = HEADER_TEXT_X + titleWidthTexts[1]:GetStringWidth() + 4 + titleWidthTexts[2]:GetStringWidth() + CLOCK_GAP
 		+ clock:GetWidth() + BUTTON_SIZE + RIGHT_MARGIN
 	local width = math.max(HEADER_WIDTH, launchLine, headerLine)
+	if rows[5]:IsShown() then
+		local welcome = 0
+		for _, text in ipairs(welcomeTexts) do
+			welcome = welcome + text:GetStringWidth()
+		end
+		width = math.max(width, HEADER_TEXT_X + ICON_COLUMN + ICON_GAP + welcome + 4 + RIGHT_MARGIN)
+	end
 	-- Every row's title and line too: the launch date is the game's full date and time.
 	for _, row in ipairs(rows) do
 		local text = math.max(row.title:GetStringWidth(), row.line:GetStringWidth())
@@ -410,16 +493,31 @@ local function Refresh()
 	elseif not turnInWiggle:IsPlaying() then
 		turnInWiggle:Play()
 	end
-	local launchRow = rows[4]
-	launchRow.line:SetText(QUEST_DASH .. ns.LaunchText())
-	local days, hours, minutes, seconds = ns.ClockParts(now)
-	if days then
-		launchRest:SetText(T.launches)
-		clock:Set(days, hours, minutes, seconds)
-		clock:Show()
+	SetQuillDone(quill, lines.reservation.done)
+	-- "Forever launches", its title in two texts, so the row's own title stays empty.
+	local launch = lines.launch
+	SetRow(rows[4], "", launch.line, launch.done)
+	launchRest:SetText(launch.title)
+	if launch.done then
+		launchRest:SetTextColor(TrackerColor("Complete", 0.6, 0.6, 0.6))
 	else
-		launchRest:SetText(T.launched)
-		clock:Hide()
+		launchRest:SetTextColor(GOLD.r, GOLD.g, GOLD.b)
+	end
+	SetShiningDone(launchWord, launch.done)
+	-- After the launch the clock stays at zeros (the user chose this, 1.1.0).
+	clock:Set(ns.ClockParts(now))
+	-- Once Forever has launched, everything above is behind and a last line welcomes the player,
+	-- with the lit infinity sign beside it (the user chose this, 1.1.0).
+	if lines.launched ~= shownLaunched then
+		shownLaunched = lines.launched
+		rows[5]:SetShown(shownLaunched)
+		SetInfinityLit(launchInfinity, not shownLaunched)
+		SetInfinityLit(welcomeInfinity, shownLaunched)
+		infinity = shownLaunched and welcomeInfinity or launchInfinity
+		-- The panel grows by the new line: measure it on the next frame, once it is laid out.
+		if panel.openHeight then
+			C_Timer.After(0, ns.SafeRelayout)
+		end
 	end
 	-- The lines' texts change with the days ("Today", "Name reservation ends"), so the width is
 	-- fitted to them again each time.
@@ -438,8 +536,8 @@ end
 -- Animation ----------------------------------------------------------------------------------
 
 -- One driver for every moving part, run each frame while the panel is shown (the game skips
--- OnUpdate for hidden frames): the texts once a second, the seconds' tick, the quill writing, the light around the infinity sign and the
--- glow of "Forever".
+-- OnUpdate for hidden frames): the texts once a second, the seconds' tick, the quill writing,
+-- the light around the lit infinity sign and the glow of "Forever".
 local QUILL_PERIOD = 2.4
 -- Where the pen is over one writing stroke: share of the period, then x right and y up, in UI
 -- units from its rest position.
@@ -462,7 +560,7 @@ local function Animate()
 	-- "Forever": the glow rises and fades.
 	local glowAlpha = 0.25 + 0.35 * (0.5 - 0.5 * math.cos(2 * math.pi * (time % GLOW_PERIOD) / GLOW_PERIOD))
 	for _, shine in ipairs(shining) do
-		if shine.word:IsVisible() then
+		if not shine.done and shine.word:IsVisible() then
 			for _, copy in ipairs(shine.glow) do
 				copy:SetAlpha(glowAlpha * GLOW_STRENGTH)
 			end
@@ -471,20 +569,23 @@ local function Animate()
 	if saved.minimized then
 		return
 	end
-	-- The quill writes a line, lifts, and the ink fades before the next one.
-	local phase = (time % QUILL_PERIOD) / QUILL_PERIOD
-	for i = 1, #PEN_PATH - 1 do
-		local a, b = PEN_PATH[i], PEN_PATH[i + 1]
-		if phase <= b[1] then
-			local k = (phase - a[1]) / (b[1] - a[1])
-			quill.pen:SetPoint("TOPLEFT", a[2] + (b[2] - a[2]) * k, a[3] + (b[3] - a[3]) * k)
-			break
+	-- The quill writes a line, lifts, and the ink fades before the next one, until name
+	-- reservation is over.
+	if not quill.done then
+		local phase = (time % QUILL_PERIOD) / QUILL_PERIOD
+		for i = 1, #PEN_PATH - 1 do
+			local a, b = PEN_PATH[i], PEN_PATH[i + 1]
+			if phase <= b[1] then
+				local k = (phase - a[1]) / (b[1] - a[1])
+				quill.pen:SetPoint("TOPLEFT", a[2] + (b[2] - a[2]) * k, a[3] + (b[3] - a[3]) * k)
+				break
+			end
 		end
-	end
-	local written = math.min(1, phase / 0.55) * #quill.ink
-	local inkAlpha = phase < 0.8 and 1 or math.max(0, 1 - (phase - 0.8) / 0.2)
-	for i, ink in ipairs(quill.ink) do
-		ink:SetAlpha(i <= written and inkAlpha or 0)
+		local written = math.min(1, phase / 0.55) * #quill.ink
+		local inkAlpha = phase < 0.8 and 1 or math.max(0, 1 - (phase - 0.8) / 0.2)
+		for i, ink in ipairs(quill.ink) do
+			ink:SetAlpha(i <= written and inkAlpha or 0)
+		end
 	end
 	-- The light slides along the infinity sign.
 	local points, widths = infinity.points, infinity.widths
@@ -543,9 +644,9 @@ local function CreateWiggle(texture)
 	return group
 end
 
--- Sizes that follow the tracker's text: the clocks are as tall as its header text, the panel
--- as wide as its longest line and as tall as its rows. Runs once built and again whenever the
--- tracker's Text Size setting changes.
+-- Sizes that follow the tracker's text: the clock a few sizes larger than its header text, the
+-- panel as wide as its longest line and as tall as its rows. Runs once built, again whenever
+-- the tracker's Text Size setting changes, and when the last line appears at launch.
 local function Relayout()
 	local headerSize = select(2, headerFont:GetFont())
 	local clockSize = headerSize + CLOCK_EXTRA
@@ -556,13 +657,18 @@ local function Relayout()
 	clock:SetPoint("LEFT", titleWidthTexts[2], "RIGHT", CLOCK_GAP, 0)
 	FitWidth()
 	local height = HEADER_HEIGHT + ROW_TOP_GAP
-	for i, row in ipairs(rows) do
+	for i = 1, 4 do
+		local row = rows[i]
 		local titleHeight = row.title:GetStringHeight()
 		if i == 4 then
 			titleHeight = launchWordText:GetStringHeight()
 		end
-		height = height + titleHeight + LINE_GAP + row.line:GetStringHeight() + (i < #rows and ROW_GAP or 4)
+		height = height + titleHeight + LINE_GAP + row.line:GetStringHeight()
 	end
+	if rows[5]:IsShown() then
+		height = height + ROW_GAP + welcomeTexts[1]:GetStringHeight()
+	end
+	height = height + 4
 	panel.openHeight = math.ceil(height)
 	SetMinimized(saved.minimized)
 end
@@ -577,8 +683,10 @@ local function SafeRelayout()
 		SayProblem("the countdown stopped.", "Type /reload to start it again.")
 	end
 end
+ns.SafeRelayout = SafeRelayout
 
 local function Build()
+	ReadTrackerSizes()
 	headerFont = Font("ObjectiveTrackerHeaderFont", "GameFontNormalMed2")
 	lineFont = Font("ObjectiveTrackerLineFont", "GameFontHighlight")
 
@@ -633,6 +741,9 @@ local function Build()
 	button:SetPushedAtlas(COLLAPSE_ART .. "-Pressed")
 	button:SetHighlightAtlas(BUTTON_HIGHLIGHT_ART, "ADD")
 	button:SetScript("OnClick", function()
+		if MINIMIZE_SOUND then
+			PlaySound(MINIMIZE_SOUND)
+		end
 		SetMinimized(not saved.minimized)
 	end)
 	panel.button = button
@@ -641,7 +752,7 @@ local function Build()
 	local body = CreateFrame("Frame", nil, panel)
 	body:SetAllPoints()
 	panel.body = body
-	for i = 1, 4 do
+	for i = 1, 5 do
 		rows[i] = CreateRow(body, rows[i - 1])
 	end
 	Marker(rows[1], QUEST_AVAILABLE_ART, 20, true)
@@ -653,7 +764,7 @@ local function Build()
 	-- "Forever launches". Its title is two texts, the shining "Forever" and "launches", so the
 	-- row's own title stays empty.
 	local launchRow = rows[4]
-	local launchWord = CreateShiningWord(launchRow, lineFont)
+	launchWord = CreateShiningWord(launchRow, lineFont)
 	launchWord.word:SetPoint("TOPLEFT", launchRow.title)
 	shining[#shining + 1] = launchWord
 	launchWordText = launchWord.word
@@ -664,8 +775,28 @@ local function Build()
 	launchRow.line:SetPoint("TOPLEFT", launchWord.word, "BOTTOMLEFT", 0, -LINE_GAP)
 	launchRow.icon:ClearAllPoints()
 	launchRow.icon:SetPoint("CENTER", launchWord.word, "LEFT", -ICON_GAP - ICON_COLUMN / 2, 0)
-	infinity = CreateInfinity(launchRow.icon, INFINITY_WIDTH)
-	infinity:SetPoint("CENTER")
+	launchInfinity = CreateInfinity(launchRow.icon, INFINITY_WIDTH)
+	launchInfinity:SetPoint("CENTER")
+
+	-- "Welcome to Forever!", the last line once Forever has launched: three texts, the shining
+	-- "Forever" in the middle, and no line under it.
+	local welcomeRow = rows[5]
+	local welcomeStart = CreateText(welcomeRow, lineFont)
+	welcomeStart:SetText(T.welcomeTo)
+	welcomeStart:SetTextColor(GOLD.r, GOLD.g, GOLD.b)
+	welcomeStart:SetPoint("TOPLEFT", welcomeRow.title)
+	local welcomeWord = CreateShiningWord(welcomeRow, lineFont)
+	welcomeWord.word:SetPoint("LEFT", welcomeStart, "RIGHT", 4, 0)
+	shining[#shining + 1] = welcomeWord
+	local welcomeEnd = CreateText(welcomeRow, lineFont)
+	welcomeEnd:SetText(T.welcomeEnd)
+	welcomeEnd:SetTextColor(GOLD.r, GOLD.g, GOLD.b)
+	welcomeEnd:SetPoint("LEFT", welcomeWord.word, "RIGHT")
+	welcomeTexts = { welcomeStart, welcomeWord.word, welcomeEnd }
+	welcomeRow.icon:ClearAllPoints()
+	welcomeRow.icon:SetPoint("CENTER", welcomeStart, "LEFT", -ICON_GAP - ICON_COLUMN / 2, 0)
+	welcomeInfinity = CreateInfinity(welcomeRow.icon, INFINITY_WIDTH)
+	welcomeInfinity:SetPoint("CENTER")
 
 	Refresh()
 	Relayout()
@@ -683,9 +814,5 @@ end
 EventUtil.ContinueOnAddOnLoaded(ADDON_NAME, function()
 	ForeverCountdownDB = ns.NormalizeSaved(ForeverCountdownDB)
 	saved = ForeverCountdownDB
-	if IsLoggedIn() then
-		Build()
-	else
-		EventUtil.RegisterOnceFrameEventAndCallback("PLAYER_LOGIN", Build)
-	end
+	EventUtil.ContinueOnPlayerLogin(Build)
 end)
