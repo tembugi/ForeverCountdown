@@ -2,6 +2,8 @@
 
 Rules for this addon. The shared rules are in `../AGENTS.md`.
 
+The name keeps "Forever" although CurseForge's policy says names shouldn't contain the game's name: here it names the launch counted down to, not a game or version label; the user chose to keep it (audit, 2026-10-05), and the CurseForge description makes that clear.
+
 A panel in the objective tracker's style that counts down to World of Warcraft Forever's launch, with the beta's end and name reservation on the way. Agreed with the user on the design canvas (board Z9 with the "Forever launches in" minimized bar, 2026-10-05). Folder, repo and packages are `ForeverCountdown`. GitHub: `tembugi/ForeverCountdown`, private (created 2026-10-05; public only when the user says, for CurseForge). No CurseForge project yet: the user creates it.
 
 ## Dates
@@ -17,6 +19,8 @@ From Blizzard's announcements, in `Countdown.lua`. Everything the player sees is
 - A date or time that changes needs a new release. When Blizzard announces a time of day for the beta's end or name reservation, ask the user whether to count those down to the second too.
 
 ## Look
+
+The spacing between the header, the milestones and their lines (8, 8 and 2 units) is the mockup's, a little tighter than the quest tracker's own (10, 10 and 4); the user kept it after the audit showed the difference (2026-10-05), so it stays rather than being read from the tracker.
 
 The tracker's own pieces, read from the game while it runs, with Blizzard's values (from `ObjectiveTrackerModuleHeaderTemplate`) only as fallbacks: the section header's width, height, title offset and button size come from the quest section's header (`QuestObjectiveTracker.Header`, 1.1.0).
 - Width: at least a tracker section's 260, and wide enough for the longest line (the header with its clock and button, or any row's title or line), measured from the texts once they are made. The same width open and minimized (the user asked, 0.1.1). The header is 26 tall with `UI-QuestTracker-Secondary-Objective-Header` art (at its own 300 width, centered, or stretched to the panel when the panel is wider at large Text Size, 1.1.2) and the section minimize button, the tracker's own (`ObjectiveTrackerModuleMinimizeButtonTemplate`, 1.1.9; made with its values when the tracker isn't loaded), its art switched as the tracker's header does (`UI-QuestTrackerButton-Secondary-Collapse`/`-Expand`, yellow highlight).
