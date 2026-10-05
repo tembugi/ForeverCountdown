@@ -4,7 +4,7 @@ Rules for this addon. The shared rules are in `../AGENTS.md`.
 
 The name keeps "Forever" although CurseForge's policy says names shouldn't contain the game's name: here it names the launch counted down to, not a game or version label; the user chose to keep it (audit, 2026-10-05), and the CurseForge description makes that clear.
 
-A panel in the objective tracker's style that counts down to World of Warcraft Forever's launch, with the beta's end and name reservation on the way. Agreed with the user on the design canvas (board Z9 with the "Forever launches in" minimized bar, 2026-10-05). Folder, repo and packages are `ForeverCountdown`. GitHub: `tembugi/ForeverCountdown`, private (created 2026-10-05; public only when the user says, for CurseForge). No CurseForge project yet: the user creates it.
+A panel in the objective tracker's style that counts down to World of Warcraft Forever's launch, with the beta's end and name reservation on the way. Agreed with the user on the design canvas (board Z9 with the "Forever launches in" minimized bar, 2026-10-05). Folder, repo and packages are `ForeverCountdown`. GitHub: `tembugi/ForeverCountdown`, public since 2026-10-05 (the user's word, for CurseForge's packager). No CurseForge project yet: the user creates it.
 
 ## Dates
 
