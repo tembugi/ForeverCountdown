@@ -1,5 +1,5 @@
 # Renders the logo, ForeverCountdown-logo.svg (the drawing, 1024 px: the infinity sign standing as an
-# hourglass, white, with gold sand falling through its crossing; the user chose it, 2026-10-05), to:
+# hourglass, white, with gold sand falling through its crossing in a stream; the user chose it, 2026-10-05), to:
 # - ForeverCountdown-logo.png, 400 x 400, for CurseForge
 # - ../Icon.tga, 128 x 128, the addon's icon in the game's addon list (## IconTexture)
 # Run in this folder: python3 make_logo.py. Needs Google Chrome, which draws the SVG.

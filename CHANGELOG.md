@@ -1,3 +1,7 @@
+## v1.1.4
+
+- The sand in the addon's icon falls in a straight stream.
+
 ## v1.1.3
 
 - A cleaner crossing in the addon's icon.
