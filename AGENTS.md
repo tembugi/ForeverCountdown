@@ -2,7 +2,7 @@
 
 Rules for this addon. The shared rules are in `../AGENTS.md`.
 
-The name keeps "Forever" although CurseForge's policy says names shouldn't contain the game's name: here it names the launch counted down to, not a game or version label; the user chose to keep it (audit, 2026-10-05), and the CurseForge description makes that clear.
+The name keeps "Forever", the shared rules' one exception to CurseForge's naming policy: here it names the launch counted down to, not a game or version label (the user's choice, audit 2026-10-05), and the CurseForge description makes that clear.
 
 A panel in the objective tracker's style that counts down to World of Warcraft Forever's launch, with the beta's end and name reservation on the way. Agreed with the user on the design canvas (board Z9 with the "Forever launches in" minimized bar, 2026-10-05). Folder, repo and packages are `ForeverCountdown`. GitHub: `tembugi/ForeverCountdown`, public since 2026-10-05 (the user's word, for CurseForge's packager). CurseForge: project ID 1727790, https://www.curseforge.com/wow/addons/forever-countdown (created by the user 2026-10-05, category Miscellaneous); the repo's webhook to CurseForge's packager is in place, so a pushed tag publishes.
 
@@ -20,7 +20,7 @@ From Blizzard's announcements, in `Countdown.lua`. Everything the player sees is
 
 ## Look
 
-The spacing between the header, the milestones and their lines (8, 8 and 2 units) is the mockup's, a little tighter than the quest tracker's own (10, 10 and 4); the user kept it after the audit showed the difference (2026-10-05), so it stays rather than being read from the tracker.
+The spacing between the header, the milestones and their lines (8, 8 and 2 units) is the mockup's, a little tighter than the quest tracker's own (10, 10 and 4); the user kept it after the audit showed the difference (2026-10-05), an exception in the shared Design rules, so it stays rather than being read from the tracker.
 
 The tracker's own pieces, read from the game while it runs, with Blizzard's values (from `ObjectiveTrackerModuleHeaderTemplate`) only as fallbacks: the section header's width, height, title offset and button size come from the quest section's header (`QuestObjectiveTracker.Header`, 1.1.0).
 - Width: at least a tracker section's 260, and wide enough for the longest line (the header with its clock and button, or any row's title or line), measured from the texts once they are made. The same width open and minimized (the user asked, 0.1.1). The header is 26 tall with `UI-QuestTracker-Secondary-Objective-Header` art (at its own 300 width, centered, or stretched to the panel when the panel is wider at large Text Size, 1.1.2) and the section minimize button, the tracker's own (`ObjectiveTrackerModuleMinimizeButtonTemplate`, 1.1.9; made with its values when the tracker isn't loaded), its art switched as the tracker's header does (`UI-QuestTrackerButton-Secondary-Collapse`/`-Expand`, yellow highlight).
@@ -38,7 +38,7 @@ The tracker's own pieces, read from the game while it runs, with Blizzard's valu
 - Minimized (the minimize button, which clicks like the tracker's own, `SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON`): only the header, "Countdown to Forever" and the clock, as when open (the user chose this over "Forever launches in", 0.1.3).
 - Once Forever has launched (board Z11 A, the user's pick, 1.1.0): the clock stays at 00:00:00:00 (white, gold colons); every milestone is behind and greyed like "Beta began", in the past tense with how many days ago ("Name reservation ended", "Forever launched"); the launch line becomes the launch's own date in the player's time zone with how many days ago ("November 5 · 2 Days ago" in Helsinki); its "Forever" turns grey without the glow, its infinity sign greyed and still, the quill at rest with its line written, greyed. A last line follows, "Welcome to Forever!" (gold, the shining white "Forever"), with no line under it and the lit infinity sign beside it, its light running.
 - Unit labels under the clock, progress bars, paw prints, window borders, close buttons and stamps were tried on the canvas and rejected.
-- Look changes are mocked on the design canvas first (https://claude.ai/artifact/TP8ZFtWEZYej4VEp7DwVKh) and built after the user picks.
+- Design canvas, for mockups the user wants: https://claude.ai/artifact/TP8ZFtWEZYej4VEp7DwVKh
 
 ## Logo
 
