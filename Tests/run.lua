@@ -494,6 +494,19 @@ Test("the animation sets only what changes", function()
 	end
 end)
 
+Test("at the real launch the panel reads as the user saw it in game in the launch preview", function()
+	-- The preview build (1.1.7, 2026-10-05) ran the clock ahead to the launch; the user saw this in
+	-- game in Finland. The real build at the real launch moment must read the same.
+	local game = NewGame(LAUNCH)
+	game.InZone(2, function()
+		game:Load():Frames(120, 2)
+		Equal(game:Read(), "Countdown to | Forever | 00 | : | 00 | : | 00 | : | 00 | Beta began | - September 17 · 49 Days ago"
+			.. " | Beta ended | - October 21 · 15 Days ago | Name reservation ended | - November 3 · 2 Days ago"
+			.. " | - November 5 · Today | Forever | launched | Welcome to | Forever | !", "the panel at the launch, Helsinki")
+	end)
+	Clean(game, "launch")
+end)
+
 if failures > 0 then
 	print(failures .. " failed")
 	os.exit(1)

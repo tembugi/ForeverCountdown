@@ -48,7 +48,7 @@ The infinity sign standing as an hourglass, white (shaded to soft silver), drawn
 
 ## Tests
 
-- `Tests/run.lua` tests the rules (`Countdown.lua`) and runs the panel in a stand-in for the game (`Tests/standin.lua`: the tracker's fonts, header and Text Size, timers and the clock; the widgets have only Forever's methods, from `Tests/WidgetAPI.lua`, made by `Tests/MakeWidgetAPI.lua` from BlizzardInterfaceResources). The launched panel can't be seen in game before November 4, so the stand-in runs it across the launch.
+- `Tests/run.lua` tests the rules (`Countdown.lua`) and runs the panel in a stand-in for the game (`Tests/standin.lua`: the tracker's fonts, header and Text Size, timers and the clock; the widgets have only Forever's methods, from `Tests/WidgetAPI.lua`, made by `Tests/MakeWidgetAPI.lua` from BlizzardInterfaceResources). The launched panel can't be seen in game before November 4, so the stand-in runs it across the launch. The user saw the launched panel in game on 2026-10-05 in a preview build whose clock ran ahead to the launch (1.1.6 and 1.1.7, branch launch-preview, since deleted); the real build at the real launch matched it widget for widget in the stand-in, and a test holds the panel's text at that moment to what the user saw.
 
 ## Saved data
 
