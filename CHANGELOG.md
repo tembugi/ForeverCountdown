@@ -1,3 +1,7 @@
+## v1.1.5
+
+- More sand in the top of the addon's icon.
+
 ## v1.1.4
 
 - The sand in the addon's icon falls in a straight stream.
