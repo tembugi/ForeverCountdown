@@ -22,9 +22,10 @@ local function Test(name, func)
 	games = {}
 	local ok, problem = pcall(func)
 	-- Whatever the test checks, it fails if the game refused the addon anything in combat.
-	for _, game in ipairs(ok and games or {}) do
+	for _, game in ipairs(games) do
 		if #game.blocked > 0 then
-			ok, problem = false, "ADDON_ACTION_BLOCKED in combat: " .. table.concat(game.blocked, ", ")
+			problem = "ADDON_ACTION_BLOCKED in combat: " .. table.concat(game.blocked, ", ") .. (ok and "" or "; then " .. tostring(problem))
+			ok = false
 			break
 		end
 	end

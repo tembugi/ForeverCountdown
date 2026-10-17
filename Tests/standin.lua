@@ -107,8 +107,12 @@ end
 -- Whose code is calling, as the game taints a run of code. A run is what the game starts: an
 -- event's handler, a frame's script, a timer, a call into Blizzard's code. It is the addon's
 -- from the moment it enters a function from the addon's files to the end of the run, Blizzard's
--- code it calls on the way included; hooksecurefunc keeps its hook's taint inside the hook.
--- A call the tests make outside a run is the addon's when the addon's code is on the stack.
+-- code it calls on the way included; hooksecurefunc keeps its hook's taint inside the hook. An
+-- event the game sends during a run goes to each handler in a run of its own, which starts with
+-- the outer run's taint and gives none back: seen in game (Just the Trees' taint log,
+-- 2026-10-17), an addon's ADDON_LOADED handler ran inside the player's first open of the talent
+-- window, and nothing after it in that open ran tainted. A call the tests make outside a run is
+-- the addon's when the addon's code is on the stack.
 -- Not modeled: taint the addon leaves in Blizzard's tables for later (the game's taint log
 -- finds that).
 local ADDON_FILES = { ["@Countdown.lua"] = true, ["@ForeverCountdown.lua"] = true }
@@ -158,6 +162,18 @@ local function Run(func, ...)
 	local run = { tainted = AddonOnStack() }
 	game.run = run
 	return EndRun(run, func(...))
+end
+
+local function EndRunApart(outer, ...)
+	game.run = outer
+	return ...
+end
+
+-- Runs an event's handler: a run of its own, even within another run.
+local function RunApart(func, ...)
+	local outer = game.run
+	game.run = { tainted = outer and outer.tainted or AddonOnStack() }
+	return EndRunApart(outer, func(...))
 end
 
 -- A hook's taint stays inside the hook (hooksecurefunc).
@@ -738,7 +754,7 @@ local function NewGame(now)
 		local list = self.events[event] or {}
 		local kept = {}
 		for _, handler in ipairs(list) do
-			if not Run(handler, ...) then
+			if not RunApart(handler, ...) then
 				kept[#kept + 1] = handler
 			end
 		end
