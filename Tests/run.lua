@@ -16,9 +16,18 @@ assert(loadfile("Countdown.lua"))("ForeverCountdown", ns)
 
 local DAY, HOUR = 86400, 3600
 local failures = 0
+local games = {} -- the stand-in games the current test plays (NewGame, below)
 
 local function Test(name, func)
+	games = {}
 	local ok, problem = pcall(func)
+	-- Whatever the test checks, it fails if the game refused the addon anything in combat.
+	for _, game in ipairs(ok and games or {}) do
+		if #game.blocked > 0 then
+			ok, problem = false, "ADDON_ACTION_BLOCKED in combat: " .. table.concat(game.blocked, ", ")
+			break
+		end
+	end
 	if ok then
 		print("ok    " .. name)
 	else
@@ -262,7 +271,12 @@ end)
 -- The panel, in the stand-in for the game (Tests/standin.lua), frame by frame.
 --------------------------------------------------------------------------------
 
-local NewGame = dofile("Tests/standin.lua")
+local StandIn = dofile("Tests/standin.lua")
+local function NewGame(now)
+	local game = StandIn(now)
+	games[#games + 1] = game
+	return game
+end
 local INFINITY_ART = "Interface\\AddOns\\ForeverCountdown\\Infinity"
 local DISC = "Interface\\CharacterFrame\\TempPortraitAlphaMask"
 local LAUNCH = ns.LAUNCH
@@ -521,6 +535,87 @@ Test("the minimize button is the tracker's own, or made like it when the tracker
 	button:Click()
 	Equal(button.normal.atlas, "UI-QuestTrackerButton-Secondary-Expand", "minimized")
 	Clean(game, "fallback button")
+end)
+
+-- Combat: the game refuses the addon's code moving, showing or hiding a protected frame then
+-- (see Combat in Tests/standin.lua); any refusal fails the test (see Test).
+
+Test("in combat the panel runs as out of it; nothing waits for combat to end", function()
+	-- A /reload in combat loads the addon in combat.
+	local game = NewGame(Utc(2026, 10, 5, 12)):EnterCombat():Load():Frames(120, 2)
+	local button = MinimizeButton(game)
+	button:Click()
+	button:Click()
+	local header
+	for _, widget in ipairs(game.widgets) do
+		if widget.scripts.OnDragStart then
+			header = widget
+		end
+	end
+	game:RunScript(header, "OnDragStart")
+	game:RunScript(header, "OnDragStop")
+	ObjectiveTrackerManager:SetTextSize(16)
+	-- The tracker moves; the panel follows it, as its own frame may in combat.
+	game:Place(ObjectiveTrackerFrame, { 1500, 805, 1760, 400 })
+	game:Frames(120, 2)
+	Equal(select(4, game.panel:GetPoint()), 160, "followed the tracker in combat")
+	local before = game:Read()
+	game:LeaveCombat():Frames(60, 1)
+	Equal(#game.events.PLAYER_REGEN_ENABLED, 0, "handlers waiting for combat to end")
+	Equal(game:Read() ~= before, true, "the clock still ticks after combat")
+	Clean(game, "combat")
+end)
+
+Test("the stand-in refuses the addon moving a protected frame in combat, and only the addon", function()
+	local game = Panel(Utc(2026, 10, 5, 12))
+	-- Code the stand-in counts as the addon's: chunks named after its file.
+	local function AddonCode(code)
+		return assert(load(code, "@ForeverCountdown.lua"))
+	end
+	local function BlizzardCode(code)
+		return assert(load(code, "@Interface/AddOns/Blizzard_Test/Test.lua"))
+	end
+	local scale = AddonCode("UIParent:SetScale(0.9)")
+	scale()
+	Equal(#game.blocked .. " " .. UIParent:GetEffectiveScale(), "0 0.9", "out of combat")
+
+	game:EnterCombat()
+	AddonCode("UIParent:Hide() UIParent:SetPoint('CENTER')")()
+	Equal(table.concat(game.blocked, ", "), "UIParent:Hide(), UIParent:SetPoint()", "the addon in combat")
+	Equal(UIParent:IsShown(), true, "the refused Hide did nothing")
+	game.blocked = {}
+	AddonCode("local panel = ... panel:ClearAllPoints() panel:SetPoint('CENTER') panel:Hide() panel:Show()")(game.panel)
+	Equal(#game.blocked, 0, "the addon's own frame in combat")
+	BlizzardCode("UIParent:Hide() UIParent:Show()")()
+	Equal(#game.blocked, 0, "Blizzard's code in combat")
+
+	-- A run that enters the addon's code stays the addon's to its end, also through a tail call.
+	local callback = AddonCode("return function() end")()
+	local hideTail = AddonCode("return function() return UIParent:Hide() end")()
+	local blizzard = BlizzardCode("local callback = ... callback() UIParent:SetPoint('TOPLEFT')")
+	game.events.TEST_EVENT = {
+		function()
+			blizzard(callback)
+		end,
+		function()
+			hideTail()
+		end,
+	}
+	game:Fire("TEST_EVENT")
+	Equal(table.concat(game.blocked, ", "), "UIParent:SetPoint(), UIParent:Hide()", "after the addon's code, in the same run")
+	game.blocked = {}
+	-- A hook's taint stays inside the hook.
+	local blizzardTable = { Update = BlizzardCode("UIParent:SetPoint('TOPLEFT')") }
+	hooksecurefunc(blizzardTable, "Update", callback)
+	game.events.TEST_EVENT = {
+		BlizzardCode("local t = ... t.Update() UIParent:SetPoint('TOPLEFT')"),
+	}
+	game:Fire("TEST_EVENT", blizzardTable)
+	Equal(#game.blocked, 0, "Blizzard's code after a hooked call")
+
+	game:LeaveCombat()
+	scale()
+	Equal(#game.blocked, 0, "after combat")
 end)
 
 if failures > 0 then
