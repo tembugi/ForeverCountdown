@@ -94,6 +94,7 @@ ns.TEXT = {
 	welcomeEnd = "!",
 	inDays = "in %s",
 	americasOceania = "Americas & Oceania",
+	restOfWorld = "Rest of the world", -- the regions the other lines don't name
 	regionLine = "%s: %s", -- a region's name, then its line
 	regionStarted = "%s: started %s", -- the same once it has started, greyed (the user asked)
 }
@@ -175,21 +176,46 @@ local function MomentIn(milestone, region)
 end
 
 -- A milestone's moment in each region Blizzard gave a time for, earliest first, when the
--- player's region isn't known and the times differ by region; nil otherwise.
+-- player's region isn't known and the times differ by region; nil otherwise. Regions with the
+-- same time share a line (the user asked, 1.2.0): when only one line covers several regions,
+-- it is everyone the other lines don't name, "Rest of the world"; otherwise their names.
 local function RegionMoments(milestone, region)
 	if milestone.moment or Known(region) or not milestone[REGIONS[1]] then
 		return nil
 	end
-	local list = {}
-	for i, key in ipairs(REGIONS) do
-		list[#list + 1] = { region = key, moment = milestone[key], order = i }
+	local list, byMoment = {}, {}
+	for _, key in ipairs(REGIONS) do
+		local moment = milestone[key]
+		local group = byMoment[moment]
+		if not group then
+			group = { moment = moment, regions = {} }
+			byMoment[moment] = group
+			list[#list + 1] = group
+		end
+		group.regions[#group.regions + 1] = key
 	end
 	table.sort(list, function(a, b)
-		if a.moment ~= b.moment then
-			return a.moment < b.moment
-		end
-		return a.order < b.order
+		return a.moment < b.moment
 	end)
+	local shared = 0
+	for _, group in ipairs(list) do
+		if #group.regions > 1 then
+			shared = shared + 1
+		end
+	end
+	for _, group in ipairs(list) do
+		if #group.regions == 1 then
+			group.name = RegionName(group.regions[1])
+		elseif shared == 1 then
+			group.name = ns.TEXT.restOfWorld
+		else
+			local names = {}
+			for i, key in ipairs(group.regions) do
+				names[i] = RegionName(key)
+			end
+			group.name = table.concat(names, ", ")
+		end
+	end
 	return list
 end
 
@@ -209,7 +235,7 @@ end
 ns.Passed = Passed
 
 -- A milestone's lines, each { text = ..., done = ... }: its moment or date, or, when the player's
--- region isn't known and the times differ by region, a line for each region, greyed and saying
+-- region isn't known and the times differ by region, a line for each time, greyed and saying
 -- "started" once that region's time has come (the user asked, 1.2.0).
 local function MilestoneLines(milestone, region, now, done)
 	local regions = RegionMoments(milestone, region)
@@ -218,7 +244,7 @@ local function MilestoneLines(milestone, region, now, done)
 		for i, entry in ipairs(regions) do
 			local started = now >= entry.moment
 			local format = started and ns.TEXT.regionStarted or ns.TEXT.regionLine
-			lines[i] = { text = format:format(RegionName(entry.region), MomentLine(entry.moment, now)), done = started }
+			lines[i] = { text = format:format(entry.name, MomentLine(entry.moment, now)), done = started }
 		end
 		return lines
 	end

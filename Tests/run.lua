@@ -210,7 +210,7 @@ Test("the stress test: starts, then ends, then ended and greyed, at its region's
 	Equal(Read(8, "CN", Utc(2026, 10, 22, 1)), "Stress test ended | October 22 · Today | true", "no start time, after")
 end)
 
-Test("with no region (the beta's), each region has its own line, earliest first, greyed and started once begun", function()
+Test("with no region (the beta's), each time has its own line, earliest first, greyed and started once begun", function()
 	local function Read(now, key)
 		local rows
 		InZone(3, function() -- UTC+3, Helsinki's summer time
@@ -223,12 +223,8 @@ Test("with no region (the beta's), each region has its own line, earliest first,
 		end
 		return row.title .. " | " .. table.concat(texts, " / ")
 	end
-	Equal(Read(Utc(2026, 10, 21, 9), "stressTest"), "Stress test starts | Europe: in 08:00:00"
-		.. " / Americas & Oceania: in 12:00:00 / Korea: in 12:00:00"
-		.. " / Taiwan: in 12:00:00", "the morning")
-	Equal(Read(Utc(2026, 10, 21, 18), "stressTest"), "Stress test starts | Europe: started October 21 · Today (grey)"
-		.. " / Americas & Oceania: in 03:00:00 / Korea: in 03:00:00"
-		.. " / Taiwan: in 03:00:00", "Europe has started")
+	Equal(Read(Utc(2026, 10, 21, 9), "stressTest"), "Stress test starts | Europe: in 08:00:00 / Rest of the world: in 12:00:00", "the morning")
+	Equal(Read(Utc(2026, 10, 21, 18), "stressTest"), "Stress test starts | Europe: started October 21 · Today (grey) / Rest of the world: in 03:00:00", "Europe has started")
 	Equal(Read(Utc(2026, 10, 21, 21), "stressTest"), "Stress test ends | in 04:00:00", "all have started")
 	Equal(Read(Utc(2026, 10, 22, 1), "stressTest"), "Stress test ended | October 22 · Today (grey)", "over")
 	Equal(Read(Utc(2026, 10, 25, 12), "reservation"), "Name reservation starts | Europe: October 27, 8:00 PM · in " .. D_DAYS:format(2)
@@ -238,10 +234,14 @@ Test("with no region (the beta's), each region has its own line, earliest first,
 		.. " / Americas & Oceania: started October 27 · " .. D_DAYS:format(1) .. " ago (grey) / Korea: started October 28 · Today (grey)"
 		.. " / Taiwan: in 00:30:00", "only Taiwan left, past midnight")
 	Equal(Read(Utc(2026, 10, 27, 23), "reservation"), "Name reservation ends | November 3 · in " .. D_DAYS:format(6), "all have started")
+	-- Regions with the same time share a line; when several such lines would, they name their regions.
+	local twoShared = { US = 1, KR = 1, EU = 2, TW = 2, day = 0 }
+	Equal(#ns.MilestoneLines(twoShared, "", 0, false), 2, "two shared lines")
+	Equal(ns.MilestoneLines(twoShared, "", 0, false)[1].text:match("^[^:]*"), "Americas & Oceania, Korea", "named when two lines are shared")
 	-- The beta's end is one moment everywhere: one line.
 	Equal(Read(Utc(2026, 10, 21, 9), "betaEnds"), "Beta ends | October 23, 8:00 PM · in " .. D_DAYS:format(2), "the beta's end")
 	-- nil, as the stand-in gives without GetCurrentRegionName, reads the same as "".
-	Equal(#ns.Lines(Utc(2026, 10, 21, 9)).stressTest.lines, 4, "no region at all")
+	Equal(#ns.Lines(Utc(2026, 10, 21, 9)).stressTest.lines, 2, "no region at all")
 end)
 
 Test("name reservation starts at its region's time, in the player's own time", function()
@@ -533,11 +533,11 @@ Test("the panel lays out each region's line, and shrinks when the last region st
 	local before = game.panel:GetHeight()
 	Has(game, "- Europe: started October 21 · Today", "Europe's line, started")
 	Grey(game:Find("- Europe: started October 21 · Today"), "Europe's line")
-	Has(game, "- Taiwan: in 00:00:02", "Taiwan's countdown")
+	Has(game, "- Rest of the world: in 00:00:02", "the rest of the world's countdown")
 	game:Frames(240, 4)
 	Has(game, "Stress test ends", "all started")
-	Equal(game:Find("Taiwan: October 21"), nil, "the region lines are gone")
-	Equal(game.panel:GetHeight() < before, true, "the panel shrinks by three lines")
+	Equal(game:Find("- Europe: started October 21 · Today"), nil, "the region lines are gone")
+	Equal(game.panel:GetHeight() < before, true, "the panel shrinks by a line")
 	-- The row under it follows the last line shown.
 	local beta = game:Find("Beta ends")
 	local _, anchor = beta:GetPoint(1)
