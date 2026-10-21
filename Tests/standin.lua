@@ -396,6 +396,7 @@ local ATLAS_SIZES = {
 	["ui-questtrackerbutton-yellow-highlight"] = { 16, 16 },
 	questnormal = { 64, 64 },
 	questturnin = { 32, 32 },
+	questdaily = { 32, 32 },
 }
 function Widget:SetAtlas(atlas, useAtlasSize)
 	self.atlas = atlas
@@ -585,6 +586,12 @@ local function NewGame(now)
 
 	function GetServerTime()
 		return game.now
+	end
+	-- The realm's region. Blizzard's code compares it with "US" and "CN" (wow-ui-source, forever).
+	-- ASSUMED: "EU", "KR" and "TW" for the other regions, and "EU" for the user's own (Finland).
+	game.region = "EU"
+	function GetCurrentRegionName()
+		return game.region
 	end
 	function GetTime()
 		return game.time

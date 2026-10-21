@@ -1,3 +1,5 @@
-## v1.1.9
+## v1.2.0
 
-- First release: a countdown to WoW Forever's launch in a panel styled like the quest tracker, with the beta's end and name reservation on the way. When Forever launches, it welcomes you in.
+- Added the stress test on October 21, at your region's times.
+- The beta now ends on October 23, as Blizzard announced.
+- The beta's end and the start of name reservation now show their time, in your own time zone.

@@ -1,10 +1,10 @@
 -- Forever Countdown: a panel in the objective tracker's style that counts down to World of
--- Warcraft Forever's launch, with the beta's end and name reservation on the way. The dates and
--- what each line says are in Countdown.lua.
+-- Warcraft Forever's launch, with the stress test, the beta's end and name reservation on the
+-- way. The dates and what each line says are in Countdown.lua.
 local ADDON_NAME, ns = ...
 
 -- Keep equal to ## Version in the .toc.
-local VERSION = "1.1.9"
+local VERSION = "1.2.0"
 ns.VERSION = VERSION
 -- The addon's name as the player sees it: the start of chat lines.
 local ADDON_TITLE = "Forever Countdown"
@@ -25,9 +25,11 @@ local BUTTON_HIGHLIGHT_ART = "UI-QuestTrackerButton-Yellow-Highlight"
 local BUTTON_SIZE = 16
 local MINIMIZE_TEMPLATE = "ObjectiveTrackerModuleMinimizeButtonTemplate"
 local MINIMIZE_SOUND = SOUNDKIT and SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON -- the tracker's own
--- The game's quest marker art: "!" for a quest to pick up, "?" for one to hand in.
+-- The game's quest marker art: "!" for a quest to pick up, "?" for one to hand in, and the
+-- daily quest's blue "!" for the stress test, a one-day event (the user's pick, 1.2.0).
 local QUEST_AVAILABLE_ART = "QuestNormal"
 local QUEST_TURN_IN_ART = "QuestTurnin"
+local QUEST_DAILY_ART = "QuestDaily"
 
 -- The panel's own measures, in UI units, from the mockup the user chose (Z9, 2026-10-05).
 -- Text sizes are the quest tracker's own (see Build): they follow its Text Size setting.
@@ -397,6 +399,7 @@ local saved
 local rows = {}
 local shining = {}
 local quill, turnInMarker, turnInWiggle
+local stressTestMarker
 local launchInfinity, welcomeInfinity -- the signs by "Forever launches" and "Welcome to Forever!"
 local infinity -- the lit one of the two, whose light runs (see Animate)
 local headerFont, lineFont -- the tracker's own font objects
@@ -419,7 +422,7 @@ local function FitWidth()
 	local headerLine = HEADER_TEXT_X + titleWidthTexts[1]:GetStringWidth() + 4 + titleWidthTexts[2]:GetStringWidth() + CLOCK_GAP
 		+ clock:GetWidth() + BUTTON_SIZE + RIGHT_MARGIN
 	local width = math.max(HEADER_WIDTH, launchLine, headerLine)
-	if rows[5]:IsShown() then
+	if rows[6]:IsShown() then
 		local welcome = 0
 		for _, text in ipairs(welcomeTexts) do
 			welcome = welcome + text:GetStringWidth()
@@ -522,24 +525,34 @@ local function SetRow(row, title, line, done)
 	end
 end
 
+local function SetGreyed(marker, greyed)
+	marker:SetDesaturated(greyed)
+	local shade = greyed and GREYED or 1
+	marker:SetVertexColor(shade, shade, shade)
+end
+
 local function Marker(row, atlas, size, greyed)
 	local marker = row.icon:CreateTexture(nil, "ARTWORK")
 	marker:SetAtlas(atlas)
 	marker:SetSize(size, size)
 	marker:SetPoint("CENTER")
 	if greyed then
-		marker:SetDesaturated(true)
-		marker:SetVertexColor(0.75, 0.75, 0.75)
+		SetGreyed(marker, true)
 	end
 	return marker
 end
 
 local function Refresh()
 	local now = GetServerTime()
-	local lines = ns.Lines(now)
+	-- The player's region, for the start times that differ by region; without it, those show
+	-- their date only.
+	local lines = ns.Lines(now, GetCurrentRegionName and GetCurrentRegionName())
 	SetRow(rows[1], lines.betaBegan.title, lines.betaBegan.line, true)
-	SetRow(rows[2], lines.betaEnds.title, lines.betaEnds.line, lines.betaEnds.done)
-	SetRow(rows[3], lines.reservation.title, lines.reservation.line, lines.reservation.done)
+	SetRow(rows[2], lines.stressTest.title, lines.stressTest.line, lines.stressTest.done)
+	SetRow(rows[3], lines.betaEnds.title, lines.betaEnds.line, lines.betaEnds.done)
+	SetRow(rows[4], lines.reservation.title, lines.reservation.line, lines.reservation.done)
+	-- The blue "!" greys like the gold one once the stress test is over.
+	SetGreyed(stressTestMarker, lines.stressTest.done)
 	turnInMarker:SetDesaturated(lines.betaEnds.done)
 	if lines.betaEnds.done then
 		turnInWiggle:Stop()
@@ -549,7 +562,7 @@ local function Refresh()
 	SetQuillDone(quill, lines.reservation.done)
 	-- "Forever launches", its title in two texts, so the row's own title stays empty.
 	local launch = lines.launch
-	SetRow(rows[4], "", launch.line, launch.done)
+	SetRow(rows[5], "", launch.line, launch.done)
 	launchRest:SetText(launch.title)
 	if launch.done then
 		launchRest:SetTextColor(TrackerColor("Complete", 0.6, 0.6, 0.6))
@@ -563,7 +576,7 @@ local function Refresh()
 	-- with the lit infinity sign beside it (the user chose this, 1.1.0).
 	if lines.launched ~= shownLaunched then
 		shownLaunched = lines.launched
-		rows[5]:SetShown(shownLaunched)
+		rows[6]:SetShown(shownLaunched)
 		SetInfinityLit(launchInfinity, not shownLaunched)
 		SetInfinityLit(welcomeInfinity, shownLaunched)
 		infinity = shownLaunched and welcomeInfinity or launchInfinity
@@ -726,15 +739,15 @@ local function Relayout()
 	clock:SetPoint("LEFT", titleWidthTexts[2], "RIGHT", CLOCK_GAP, 0)
 	FitWidth()
 	local height = HEADER_HEIGHT + ROW_TOP_GAP
-	for i = 1, 4 do
+	for i = 1, 5 do
 		local row = rows[i]
 		local titleHeight = row.title:GetStringHeight()
-		if i == 4 then
+		if i == 5 then
 			titleHeight = launchWordText:GetStringHeight()
 		end
 		height = height + titleHeight + LINE_GAP + row.line:GetStringHeight()
 	end
-	if rows[5]:IsShown() then
+	if rows[6]:IsShown() then
 		height = height + ROW_GAP + welcomeTexts[1]:GetStringHeight()
 	end
 	height = height + 4
@@ -821,18 +834,19 @@ local function Build()
 	local body = CreateFrame("Frame", nil, panel)
 	body:SetAllPoints()
 	panel.body = body
-	for i = 1, 5 do
+	for i = 1, 6 do
 		rows[i] = CreateRow(body, rows[i - 1])
 	end
 	Marker(rows[1], QUEST_AVAILABLE_ART, 20, true)
-	turnInMarker = Marker(rows[2], QUEST_TURN_IN_ART, 16)
+	stressTestMarker = Marker(rows[2], QUEST_DAILY_ART, 16) -- the same art size as the "?"
+	turnInMarker = Marker(rows[3], QUEST_TURN_IN_ART, 16)
 	turnInWiggle = CreateWiggle(turnInMarker)
-	quill = CreateQuill(rows[3].icon, 15)
+	quill = CreateQuill(rows[4].icon, 15)
 	quill:SetPoint("CENTER", 0, 1)
 
 	-- "Forever launches". Its title is two texts, the shining "Forever" and "launches", so the
 	-- row's own title stays empty.
-	local launchRow = rows[4]
+	local launchRow = rows[5]
 	launchWord = CreateShiningWord(launchRow, lineFont)
 	launchWord.word:SetPoint("TOPLEFT", launchRow.title)
 	shining[#shining + 1] = launchWord
@@ -849,7 +863,7 @@ local function Build()
 
 	-- "Welcome to Forever!", the last line once Forever has launched: three texts, the shining
 	-- "Forever" in the middle, and no line under it.
-	local welcomeRow = rows[5]
+	local welcomeRow = rows[6]
 	local welcomeStart = CreateText(welcomeRow, lineFont)
 	welcomeStart:SetText(T.welcomeTo)
 	welcomeStart:SetTextColor(GOLD.r, GOLD.g, GOLD.b)
