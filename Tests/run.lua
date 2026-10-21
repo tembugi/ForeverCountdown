@@ -163,9 +163,9 @@ Test("the beta's end reads in the player's own time, then how many days ago", fu
 			Equal(Lines(Utc(2026, 10, 21, 12), "EU").betaEnds.line, "October 23, 20:00 · in " .. D_DAYS:format(2), "Helsinki, 24-hour")
 			Equal(Lines(Utc(2026, 10, 22, 12), "EU").betaEnds.line, "October 23, 20:00 · in " .. D_DAYS:format(1), "Helsinki, a day and 5 hours before")
 			Equal(Lines(Utc(2026, 10, 22, 17), "EU").betaEnds.line, "October 23, 20:00 · in " .. D_DAYS:format(1), "Helsinki, exactly a day before")
-			Equal(Lines(Utc(2026, 10, 22, 17) + 1, "EU").betaEnds.line, "October 23, 20:00 · in 23:59:59", "Helsinki, under a day before: a countdown")
-			Equal(Lines(Utc(2026, 10, 23, 9), "EU").betaEnds.line, "October 23, 20:00 · in 08:00:00", "Helsinki, that morning")
-			Equal(Lines(Utc(2026, 10, 23, 17) - 1, "EU").betaEnds.line, "October 23, 20:00 · in 00:00:01", "Helsinki, a second before")
+			Equal(Lines(Utc(2026, 10, 22, 17) + 1, "EU").betaEnds.line, "in 23:59:59", "Helsinki, under a day before: a countdown")
+			Equal(Lines(Utc(2026, 10, 23, 9), "EU").betaEnds.line, "in 08:00:00", "Helsinki, that morning")
+			Equal(Lines(Utc(2026, 10, 23, 17) - 1, "EU").betaEnds.line, "in 00:00:01", "Helsinki, a second before")
 		end)
 		Equal(Lines(Utc(2026, 10, 23, 17), "EU").betaEnds.line, "October 23 · Today", "Helsinki, once ended")
 		Equal(Lines(Utc(2026, 10, 24, 9), "EU").betaEnds.line, "October 23 · " .. D_DAYS:format(1) .. " ago", "Helsinki, the day after")
@@ -189,16 +189,16 @@ Test("the stress test: starts, then ends, then ended and greyed, at its region's
 		return line
 	end
 	local morning = Utc(2026, 10, 21, 9)
-	Equal(Read(3, "EU", morning), "Stress test starts | October 21, 8:00 PM · in 08:00:00 | false", "Helsinki, that morning")
-	Equal(Read(3, "EU", Utc(2026, 10, 21, 17)), "Stress test ends | October 22, 4:00 AM · in 08:00:00 | false", "Helsinki, as it starts")
+	Equal(Read(3, "EU", morning), "Stress test starts | in 08:00:00 | false", "Helsinki, that morning")
+	Equal(Read(3, "EU", Utc(2026, 10, 21, 17)), "Stress test ends | in 08:00:00 | false", "Helsinki, as it starts")
 	Equal(Read(3, "EU", Utc(2026, 10, 22, 1)), "Stress test ended | October 22 · Today | true", "Helsinki, as it ends")
-	Equal(Read(1, "EU", morning), "Stress test starts | October 21, 6:00 PM · in 08:00:00 | false", "London (BST)")
-	Equal(Read(-7, "US", morning), "Stress test starts | October 21, 2:00 PM · in 12:00:00 | false", "California")
-	Equal(Read(-7, "US", Utc(2026, 10, 21, 21)), "Stress test ends | October 21, 6:00 PM · in 04:00:00 | false", "California, as it starts")
-	Equal(Read(-4, "US", morning), "Stress test starts | October 21, 5:00 PM · in 12:00:00 | false", "New York")
-	Equal(Read(13, "US", morning), "Stress test starts | October 22, 10:00 AM · in 12:00:00 | false", "Auckland")
-	Equal(Read(9, "KR", morning), "Stress test starts | October 22, 6:00 AM · in 12:00:00 | false", "Seoul")
-	Equal(Read(8, "TW", morning), "Stress test starts | October 22, 5:00 AM · in 12:00:00 | false", "Taipei")
+	Equal(Read(1, "EU", morning), "Stress test starts | in 08:00:00 | false", "London (BST)")
+	Equal(Read(-7, "US", morning), "Stress test starts | in 12:00:00 | false", "California")
+	Equal(Read(-7, "US", Utc(2026, 10, 21, 21)), "Stress test ends | in 04:00:00 | false", "California, as it starts")
+	Equal(Read(-4, "US", morning), "Stress test starts | in 12:00:00 | false", "New York")
+	Equal(Read(13, "US", morning), "Stress test starts | in 12:00:00 | false", "Auckland")
+	Equal(Read(9, "KR", morning), "Stress test starts | in 12:00:00 | false", "Seoul")
+	Equal(Read(8, "TW", morning), "Stress test starts | in 12:00:00 | false", "Taipei")
 	Equal(Read(3, "EU", Utc(2026, 10, 19, 9)), "Stress test starts | October 21, 8:00 PM · in " .. D_DAYS:format(2) .. " | false", "Helsinki, days before")
 	-- Europe's start isn't the others': 18:00 UTC is during it in Europe, before it elsewhere.
 	Equal(Read(0, "EU", Utc(2026, 10, 21, 18)):match("^[^|]*"), "Stress test ends ", "Europe at 18:00 UTC")
@@ -206,7 +206,7 @@ Test("the stress test: starts, then ends, then ended and greyed, at its region's
 	-- A region Blizzard gave no start time for: the start's date by the player's calendar, then
 	-- the end, the same moment everywhere.
 	Equal(Read(8, "CN", morning), "Stress test starts | October 21 · Today | false", "no start time, that day")
-	Equal(Read(8, "CN", Utc(2026, 10, 21, 16)), "Stress test ends | October 22, 9:00 AM · in 09:00:00 | false", "no start time, the next day")
+	Equal(Read(8, "CN", Utc(2026, 10, 21, 16)), "Stress test ends | in 09:00:00 | false", "no start time, the next day")
 	Equal(Read(8, "CN", Utc(2026, 10, 22, 1)), "Stress test ended | October 22 · Today | true", "no start time, after")
 end)
 
@@ -223,20 +223,20 @@ Test("with no region (the beta's), each region has its own line, earliest first,
 		end
 		return row.title .. " | " .. table.concat(texts, " / ")
 	end
-	Equal(Read(Utc(2026, 10, 21, 9), "stressTest"), "Stress test starts | Europe: October 21, 8:00 PM · in 08:00:00"
-		.. " / Americas & Oceania: October 22, 12:00 AM · in 12:00:00 / Korea: October 22, 12:00 AM · in 12:00:00"
-		.. " / Taiwan: October 22, 12:00 AM · in 12:00:00", "the morning")
+	Equal(Read(Utc(2026, 10, 21, 9), "stressTest"), "Stress test starts | Europe: in 08:00:00"
+		.. " / Americas & Oceania: in 12:00:00 / Korea: in 12:00:00"
+		.. " / Taiwan: in 12:00:00", "the morning")
 	Equal(Read(Utc(2026, 10, 21, 18), "stressTest"), "Stress test starts | Europe: started October 21 · Today (grey)"
-		.. " / Americas & Oceania: October 22, 12:00 AM · in 03:00:00 / Korea: October 22, 12:00 AM · in 03:00:00"
-		.. " / Taiwan: October 22, 12:00 AM · in 03:00:00", "Europe has started")
-	Equal(Read(Utc(2026, 10, 21, 21), "stressTest"), "Stress test ends | October 22, 4:00 AM · in 04:00:00", "all have started")
+		.. " / Americas & Oceania: in 03:00:00 / Korea: in 03:00:00"
+		.. " / Taiwan: in 03:00:00", "Europe has started")
+	Equal(Read(Utc(2026, 10, 21, 21), "stressTest"), "Stress test ends | in 04:00:00", "all have started")
 	Equal(Read(Utc(2026, 10, 22, 1), "stressTest"), "Stress test ended | October 22 · Today (grey)", "over")
 	Equal(Read(Utc(2026, 10, 25, 12), "reservation"), "Name reservation starts | Europe: October 27, 8:00 PM · in " .. D_DAYS:format(2)
 		.. " / Americas & Oceania: October 27, 11:00 PM · in " .. D_DAYS:format(2) .. " / Korea: October 28, 1:00 AM · in " .. D_DAYS:format(3)
 		.. " / Taiwan: October 28, 2:00 AM · in " .. D_DAYS:format(3), "name reservation, days before")
 	Equal(Read(Utc(2026, 10, 27, 22, 30), "reservation"), "Name reservation starts | Europe: started October 27 · " .. D_DAYS:format(1) .. " ago (grey)"
 		.. " / Americas & Oceania: started October 27 · " .. D_DAYS:format(1) .. " ago (grey) / Korea: started October 28 · Today (grey)"
-		.. " / Taiwan: October 28, 2:00 AM · in 00:30:00", "only Taiwan left, past midnight")
+		.. " / Taiwan: in 00:30:00", "only Taiwan left, past midnight")
 	Equal(Read(Utc(2026, 10, 27, 23), "reservation"), "Name reservation ends | November 3 · in " .. D_DAYS:format(6), "all have started")
 	-- The beta's end is one moment everywhere: one line.
 	Equal(Read(Utc(2026, 10, 21, 9), "betaEnds"), "Beta ends | October 23, 8:00 PM · in " .. D_DAYS:format(2), "the beta's end")
@@ -260,7 +260,7 @@ Test("name reservation starts at its region's time, in the player's own time", f
 	Equal(Read(9, "KR", before), "Name reservation starts | October 28, 7:00 AM · in " .. D_DAYS:format(2), "Seoul, 07:00 KST")
 	Equal(Read(8, "TW", before), "Name reservation starts | October 28, 7:00 AM · in " .. D_DAYS:format(2), "Taipei, 07:00 CST")
 	-- At its start it turns to the end, November 3, a date only.
-	Equal(Read(-7, "US", Utc(2026, 10, 27, 20) - 1), "Name reservation starts | October 27, 1:00 PM · in 00:00:01", "California, a second before")
+	Equal(Read(-7, "US", Utc(2026, 10, 27, 20) - 1), "Name reservation starts | in 00:00:01", "California, a second before")
 	Equal(Read(-7, "US", Utc(2026, 10, 27, 20)), "Name reservation ends | November 3 · in " .. D_DAYS:format(7), "California, at the start")
 	Equal(Read(1, "EU", Utc(2026, 10, 27, 17)), "Name reservation ends | November 3 · in " .. D_DAYS:format(7), "Paris, at the start")
 	Equal(Read(1, "US", Utc(2026, 10, 27, 17)):match("^[^|]*"), "Name reservation starts ", "an American realm at Europe's start")
@@ -533,7 +533,7 @@ Test("the panel lays out each region's line, and shrinks when the last region st
 	local before = game.panel:GetHeight()
 	Has(game, "- Europe: started October 21 · Today", "Europe's line, started")
 	Grey(game:Find("- Europe: started October 21 · Today"), "Europe's line")
-	Has(game, "- Taiwan: October 21, 9:00 PM · in 00:00:02", "Taiwan's countdown")
+	Has(game, "- Taiwan: in 00:00:02", "Taiwan's countdown")
 	game:Frames(240, 4)
 	Has(game, "Stress test ends", "all started")
 	Equal(game:Find("Taiwan: October 21"), nil, "the region lines are gone")
@@ -541,7 +541,7 @@ Test("the panel lays out each region's line, and shrinks when the last region st
 	-- The row under it follows the last line shown.
 	local beta = game:Find("Beta ends")
 	local _, anchor = beta:GetPoint(1)
-	Equal(anchor, game:Find("- October 22, 1:00 AM · in 03:59:58") or game:Find("- October 22, 1:00 AM · in 03:59:59"), "Beta ends under the stress test's one line")
+	Equal(anchor, game:Find("- in 03:59:58") or game:Find("- in 03:59:59"), "Beta ends under the stress test's one line")
 	Clean(game, "regions")
 	game = Panel(Utc(2026, 10, 21, 12))
 	local width = game.panel:GetWidth()

@@ -145,22 +145,21 @@ end
 ns.DayLine = DayLine
 
 -- The same for a moment, on the day it falls on where the player is, with its time in the
--- player's own time zone until it has passed: "October 23, 19:00 · in 2 Days", within a day a
--- countdown, "October 23, 19:00 · in 04:12:33" (the user asked, 1.2.0), then "October 23 ·
--- Today" and "October 23 · 2 Days ago". The time is the game's clock's
+-- player's own time zone until it has passed: "October 23, 19:00 · in 2 Days"; within a day only
+-- a countdown, "in 04:12:33" (the user asked, 1.2.0: the date and time made it too busy); then
+-- "October 23 · Today" and "October 23 · 2 Days ago". The time is the game's clock's
 -- (GameTime_GetFormattedTime, its 12/24-hour setting).
 local function MomentLine(moment, now)
 	local day = LocalDay(moment)
 	if now >= moment then
 		return DayLine(day, now)
 	end
-	local t = date("*t", moment)
-	local time = GameTime_GetFormattedTime(tonumber(t.hour) or 0, tonumber(t.min) or 0, true)
 	local left = moment - now
 	if left < DAY then
-		local countdown = string.format("%02d:%02d:%02d", math.floor(left / HOUR), math.floor(left / 60) % 60, math.floor(left % 60))
-		return DayText(day) .. ", " .. time .. " · " .. ns.TEXT.inDays:format(countdown)
+		return ns.TEXT.inDays:format(string.format("%02d:%02d:%02d", math.floor(left / HOUR), math.floor(left / 60) % 60, math.floor(left % 60)))
 	end
+	local t = date("*t", moment)
+	local time = GameTime_GetFormattedTime(tonumber(t.hour) or 0, tonumber(t.min) or 0, true)
 	return DayText(day) .. ", " .. time .. DayCount(day, now)
 end
 ns.MomentLine = MomentLine
