@@ -692,15 +692,23 @@ local function Animate()
 	end
 end
 
+-- After an error (already given to the game's error handler): everything stops until /reload,
+-- and chat says so once.
 local stopped = false
+local function Stop()
+	stopped = true
+	if panel then
+		panel:SetScript("OnUpdate", nil)
+	end
+	SayProblem("the countdown stopped.", "Type /reload to start it again.")
+end
+
 local function SafeAnimate()
 	if stopped then
 		return
 	end
 	if not xpcall(Animate, CallErrorHandler) then
-		stopped = true
-		panel:SetScript("OnUpdate", nil)
-		SayProblem("the countdown stopped.", "Type /reload to start it again.")
+		Stop()
 	end
 end
 
@@ -760,9 +768,7 @@ local function SafeRelayout()
 		return
 	end
 	if not xpcall(Relayout, CallErrorHandler) then
-		stopped = true
-		panel:SetScript("OnUpdate", nil)
-		SayProblem("the countdown stopped.", "Type /reload to start it again.")
+		Stop()
 	end
 end
 ns.SafeRelayout = SafeRelayout
@@ -894,8 +900,35 @@ local function Build()
 	panel:SetScript("OnUpdate", SafeAnimate)
 end
 
-EventUtil.ContinueOnAddOnLoaded(ADDON_NAME, function()
-	ForeverCountdownDB = ns.NormalizeSaved(ForeverCountdownDB)
-	saved = ForeverCountdownDB
-	EventUtil.ContinueOnPlayerLogin(Build)
+-- Loading: the saved data once the game has read it, the panel at login. On the addon's own
+-- frame, not EventUtil: its callback registry hands out owner IDs from a counter shared with
+-- Blizzard's own code, and registering from the addon tainted that counter, so the game's
+-- settings and gamepad action bars read it tainted at login (taint log, 1.2.0).
+local function OnEvent(loader, event, name)
+	if event == "ADDON_LOADED" and name == ADDON_NAME then
+		loader:UnregisterEvent("ADDON_LOADED")
+		ForeverCountdownDB = ns.NormalizeSaved(ForeverCountdownDB)
+		saved = ForeverCountdownDB
+	elseif event == "PLAYER_LOGIN" then
+		loader:UnregisterEvent("PLAYER_LOGIN")
+		if saved then
+			Build()
+		end
+	end
+end
+
+local loader = CreateFrame("Frame")
+loader:RegisterEvent("ADDON_LOADED")
+loader:RegisterEvent("PLAYER_LOGIN")
+loader:SetScript("OnEvent", function(...)
+	if stopped then
+		return
+	end
+	if not xpcall(OnEvent, CallErrorHandler, ...) then
+		-- A panel the load left half built doesn't show.
+		if panel then
+			panel:Hide()
+		end
+		Stop()
+	end
 end)

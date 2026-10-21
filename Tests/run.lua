@@ -619,6 +619,18 @@ Test("at the real launch the panel reads as the user saw it in game in the launc
 	Clean(game, "launch")
 end)
 
+Test("an error while loading goes to the game's error handler, says so once, and shows nothing", function()
+	local game = NewGame(Utc(2026, 10, 5, 12))
+	GetServerTime = function()
+		error("broken clock")
+	end
+	game:Load():Frames(120, 2)
+	Equal(#game.errors, 1, "one error to the game's handler")
+	Equal(#game.chat, 1, "one chat line")
+	Equal(game.chat[1]:find("stopped") ~= nil, true, "says it stopped")
+	Equal(game.panel:IsShown(), false, "the half-built panel is hidden")
+end)
+
 Test("the minimize button is the tracker's own, or made like it when the tracker is missing", function()
 	local game = Panel(Utc(2026, 10, 5, 12))
 	local button = MinimizeButton(game)

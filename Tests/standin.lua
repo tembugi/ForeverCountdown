@@ -7,7 +7,7 @@
 --   Blizzard_ObjectiveTracker: Blizzard_ObjectiveTrackerFonts.xml, Blizzard_ObjectiveTrackerManager.lua
 --     (SetTextSize), Blizzard_ObjectiveTrackerShared.lua (OBJECTIVE_TRACKER_COLOR) and
 --     Blizzard_ObjectiveTrackerModule.xml (the section header's sizes)
---   Blizzard_SharedXML: EventUtil.lua; Blizzard_SharedXML/Mainline/SoundKitConstants.lua
+--   Blizzard_SharedXML/Mainline/SoundKitConstants.lua
 -- The widgets have only the methods Forever's widgets have (Tests/WidgetAPI.lua). In combat
 -- (game:EnterCombat) the game refuses the addon's code moving, showing or hiding a protected
 -- frame, as the game does (see Combat). What the stand-in assumes beyond the game's code is
@@ -275,6 +275,35 @@ function Widget:SetScript(name, func)
 end
 function Widget:GetScript(name)
 	return self.scripts[name]
+end
+
+-- Events a frame registers go to its OnEvent script, with the frame and the event first, until
+-- it unregisters them.
+function Widget:RegisterEvent(event)
+	self.registered = self.registered or {}
+	if self.registered[event] then
+		return
+	end
+	local handler
+	handler = function(...)
+		if self.registered[event] ~= handler then
+			return true -- unregistered: the game sends it no more
+		end
+		local script = self.scripts.OnEvent
+		if script then
+			script(self, event, ...)
+		end
+		return false
+	end
+	self.registered[event] = handler
+	local list = game.events[event] or {}
+	game.events[event] = list
+	list[#list + 1] = handler
+end
+function Widget:UnregisterEvent(event)
+	if self.registered then
+		self.registered[event] = nil
+	end
 end
 
 -- Anchors: kept as given. A point set again replaces its earlier anchor, as in the game.
@@ -621,46 +650,6 @@ local function NewGame(now)
 		game.chat[#game.chat + 1] = table.concat({ ... }, " ")
 	end
 
-	-- EventUtil, as Blizzard_SharedXML/EventUtil.lua has it.
-	function IsLoggedIn()
-		return game.loggedIn
-	end
-	C_AddOns = {
-		IsAddOnLoaded = function(name)
-			return game.loaded == name, game.loaded == name
-		end,
-	}
-	EventUtil = {}
-	function EventUtil.RegisterOnceFrameEventAndCallback(event, callback, ...)
-		local required = { ... }
-		local list = game.events[event] or {}
-		game.events[event] = list
-		list[#list + 1] = function(...)
-			for i, value in ipairs(required) do
-				if select(i, ...) ~= value then
-					return false
-				end
-			end
-			callback(...)
-			return true
-		end
-	end
-	function EventUtil.ContinueOnAddOnLoaded(name, callback)
-		local _, isLoaded = C_AddOns.IsAddOnLoaded(name)
-		if isLoaded then
-			callback()
-			return
-		end
-		EventUtil.RegisterOnceFrameEventAndCallback("ADDON_LOADED", callback, name)
-	end
-	function EventUtil.ContinueOnPlayerLogin(callback)
-		if IsLoggedIn() then
-			callback()
-			return
-		end
-		EventUtil.RegisterOnceFrameEventAndCallback("PLAYER_LOGIN", callback)
-	end
-
 	-- The templates the addon uses, as Blizzard_ObjectiveTracker/Blizzard_ObjectiveTrackerModule.xml
 	-- has them; the tracker loads before the addon (## OptionalDeps).
 	local TEMPLATES = {
@@ -744,7 +733,6 @@ local function NewGame(now)
 			Run(assert(loadfile(file)), "ForeverCountdown", ns)
 		end
 		self.ns = ns
-		self.loaded = "ForeverCountdown"
 		self:Fire("ADDON_LOADED", "ForeverCountdown")
 		self.loggedIn = true
 		self:Fire("PLAYER_LOGIN")
