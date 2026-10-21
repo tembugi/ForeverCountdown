@@ -15,6 +15,21 @@ local ns = {}
 assert(loadfile("Countdown.lua"))("ForeverCountdown", ns)
 
 local DAY, HOUR = 86400, 3600
+
+-- ns.Lines, with each row's lines also as one text (`line`, joined by " / ") for comparing.
+local function Lines(now, region)
+	local rows = ns.Lines(now, region)
+	for _, row in pairs(rows) do
+		if type(row) == "table" then
+			local texts = {}
+			for i, line in ipairs(row.lines) do
+				texts[i] = line.text
+			end
+			row.line = table.concat(texts, " / ")
+		end
+	end
+	return rows
+end
 local failures = 0
 local games = {} -- the stand-in games the current test plays (NewGame, below)
 
@@ -108,33 +123,33 @@ end)
 -- The tests below run in UTC unless they say otherwise.
 Test("the beta ends October 23 at 10:00 PDT, 17:00 UTC, one moment in every region", function()
 	for _, region in ipairs({ "US", "EU", "KR", "TW", "CN" }) do
-		local lines = ns.Lines(Utc(2026, 10, 23, 17) - 1, region)
+		local lines = Lines(Utc(2026, 10, 23, 17) - 1, region)
 		Equal(lines.betaEnds.title, "Beta ends", region .. ", a second before")
 		Equal(lines.betaEnds.done, false, region .. ", not done a second before")
-		lines = ns.Lines(Utc(2026, 10, 23, 17), region)
+		lines = Lines(Utc(2026, 10, 23, 17), region)
 		Equal(lines.betaEnds.title, "Beta ended", region .. ", at the moment")
 		Equal(lines.betaEnds.done, true, region .. ", done at the moment")
 	end
-	local lines = ns.Lines(Utc(2026, 10, 22, 12))
+	local lines = Lines(Utc(2026, 10, 22, 12))
 	Equal(lines.betaBegan.done, true, "beta began is always done")
 	Equal(lines.betaBegan.line, "September 17 · " .. D_DAYS:format(35) .. " ago", "beta began, 35 days ago")
-	Equal(ns.Lines(Utc(2026, 10, 5, 12)).betaBegan.line, "September 17 · " .. D_DAYS:format(18) .. " ago", "beta began, 18 days ago")
+	Equal(Lines(Utc(2026, 10, 5, 12)).betaBegan.line, "September 17 · " .. D_DAYS:format(18) .. " ago", "beta began, 18 days ago")
 end)
 
 Test("name reservation where Blizzard gave no start time: starts until October 27 (Today on the day), then ends with November 3", function()
-	local lines = ns.Lines(Utc(2026, 10, 26, 12))
+	local lines = Lines(Utc(2026, 10, 26, 12), "CN")
 	Equal(lines.reservation.title, "Name reservation starts", "the day before")
 	Equal(lines.reservation.line, "October 27 · in " .. D_DAYS:format(1), "the day before")
-	lines = ns.Lines(Utc(2026, 10, 27, 12))
+	lines = Lines(Utc(2026, 10, 27, 12), "CN")
 	Equal(lines.reservation.title, "Name reservation starts", "the first day")
 	Equal(lines.reservation.line, "October 27 · Today", "the first day")
-	lines = ns.Lines(Utc(2026, 10, 28, 12))
+	lines = Lines(Utc(2026, 10, 28, 12), "CN")
 	Equal(lines.reservation.title, "Name reservation ends", "the second day")
 	Equal(lines.reservation.line, "November 3 · in " .. D_DAYS:format(6), "the second day")
-	lines = ns.Lines(Utc(2026, 11, 3, 20))
+	lines = Lines(Utc(2026, 11, 3, 20), "CN")
 	Equal(lines.reservation.line, "November 3 · Today", "the last day")
 	Equal(lines.reservation.done, false, "not done on the last day")
-	lines = ns.Lines(Utc(2026, 11, 4, 9))
+	lines = Lines(Utc(2026, 11, 4, 9), "CN")
 	Equal(lines.reservation.title, "Name reservation ended", "the day after")
 	Equal(lines.reservation.line, "November 3 · " .. D_DAYS:format(1) .. " ago", "the day after")
 	Equal(lines.reservation.done, true, "done the day after")
@@ -143,19 +158,23 @@ end)
 -- A moment's line, in the player's time zone with its time until it has passed.
 Test("the beta's end reads in the player's own time, then how many days ago", function()
 	InZone(3, function() -- Helsinki in October (EEST)
-		Equal(ns.Lines(Utc(2026, 10, 21, 12), "EU").betaEnds.line, "October 23, 8:00 PM · in " .. D_DAYS:format(2), "Helsinki, 12-hour")
+		Equal(Lines(Utc(2026, 10, 21, 12), "EU").betaEnds.line, "October 23, 8:00 PM · in " .. D_DAYS:format(2), "Helsinki, 12-hour")
 		WithClock(true, function()
-			Equal(ns.Lines(Utc(2026, 10, 21, 12), "EU").betaEnds.line, "October 23, 20:00 · in " .. D_DAYS:format(2), "Helsinki, 24-hour")
-			Equal(ns.Lines(Utc(2026, 10, 23, 9), "EU").betaEnds.line, "October 23, 20:00 · Today", "Helsinki, that morning")
+			Equal(Lines(Utc(2026, 10, 21, 12), "EU").betaEnds.line, "October 23, 20:00 · in " .. D_DAYS:format(2), "Helsinki, 24-hour")
+			Equal(Lines(Utc(2026, 10, 22, 12), "EU").betaEnds.line, "October 23, 20:00 · in " .. D_DAYS:format(1), "Helsinki, a day and 5 hours before")
+			Equal(Lines(Utc(2026, 10, 22, 17), "EU").betaEnds.line, "October 23, 20:00 · in " .. D_DAYS:format(1), "Helsinki, exactly a day before")
+			Equal(Lines(Utc(2026, 10, 22, 17) + 1, "EU").betaEnds.line, "October 23, 20:00 · in 23:59:59", "Helsinki, under a day before: a countdown")
+			Equal(Lines(Utc(2026, 10, 23, 9), "EU").betaEnds.line, "October 23, 20:00 · in 08:00:00", "Helsinki, that morning")
+			Equal(Lines(Utc(2026, 10, 23, 17) - 1, "EU").betaEnds.line, "October 23, 20:00 · in 00:00:01", "Helsinki, a second before")
 		end)
-		Equal(ns.Lines(Utc(2026, 10, 23, 17), "EU").betaEnds.line, "October 23 · Today", "Helsinki, once ended")
-		Equal(ns.Lines(Utc(2026, 10, 24, 9), "EU").betaEnds.line, "October 23 · " .. D_DAYS:format(1) .. " ago", "Helsinki, the day after")
+		Equal(Lines(Utc(2026, 10, 23, 17), "EU").betaEnds.line, "October 23 · Today", "Helsinki, once ended")
+		Equal(Lines(Utc(2026, 10, 24, 9), "EU").betaEnds.line, "October 23 · " .. D_DAYS:format(1) .. " ago", "Helsinki, the day after")
 	end)
 	InZone(-7, function() -- California (PDT)
-		Equal(ns.Lines(Utc(2026, 10, 21, 20), "US").betaEnds.line, "October 23, 10:00 AM · in " .. D_DAYS:format(2), "California")
+		Equal(Lines(Utc(2026, 10, 21, 20), "US").betaEnds.line, "October 23, 10:00 AM · in " .. D_DAYS:format(2), "California")
 	end)
 	InZone(13, function() -- Auckland (NZDT): already the 24th there
-		Equal(ns.Lines(Utc(2026, 10, 21, 20), "US").betaEnds.line, "October 24, 6:00 AM · in " .. D_DAYS:format(2), "Auckland")
+		Equal(Lines(Utc(2026, 10, 21, 20), "US").betaEnds.line, "October 24, 6:00 AM · in " .. D_DAYS:format(2), "Auckland")
 	end)
 end)
 
@@ -164,36 +183,72 @@ Test("the stress test: starts, then ends, then ended and greyed, at its region's
 	local function Read(zone, region, now)
 		local line
 		InZone(zone, function()
-			local lines = ns.Lines(now, region)
+			local lines = Lines(now, region)
 			line = lines.stressTest.title .. " | " .. lines.stressTest.line .. " | " .. tostring(lines.stressTest.done)
 		end)
 		return line
 	end
 	local morning = Utc(2026, 10, 21, 9)
-	Equal(Read(3, "EU", morning), "Stress test starts | October 21, 8:00 PM · Today | false", "Helsinki, that morning")
-	Equal(Read(3, "EU", Utc(2026, 10, 21, 17)), "Stress test ends | October 22, 4:00 AM · in " .. D_DAYS:format(1) .. " | false", "Helsinki, as it starts")
+	Equal(Read(3, "EU", morning), "Stress test starts | October 21, 8:00 PM · in 08:00:00 | false", "Helsinki, that morning")
+	Equal(Read(3, "EU", Utc(2026, 10, 21, 17)), "Stress test ends | October 22, 4:00 AM · in 08:00:00 | false", "Helsinki, as it starts")
 	Equal(Read(3, "EU", Utc(2026, 10, 22, 1)), "Stress test ended | October 22 · Today | true", "Helsinki, as it ends")
-	Equal(Read(1, "EU", morning), "Stress test starts | October 21, 6:00 PM · Today | false", "London (BST)")
-	Equal(Read(-7, "US", morning), "Stress test starts | October 21, 2:00 PM · Today | false", "California")
-	Equal(Read(-7, "US", Utc(2026, 10, 21, 21)), "Stress test ends | October 21, 6:00 PM · Today | false", "California, as it starts")
-	Equal(Read(-4, "US", morning), "Stress test starts | October 21, 5:00 PM · Today | false", "New York")
-	Equal(Read(13, "US", morning), "Stress test starts | October 22, 10:00 AM · in " .. D_DAYS:format(1) .. " | false", "Auckland")
-	Equal(Read(9, "KR", morning), "Stress test starts | October 22, 6:00 AM · in " .. D_DAYS:format(1) .. " | false", "Seoul")
-	Equal(Read(8, "TW", morning), "Stress test starts | October 22, 5:00 AM · in " .. D_DAYS:format(1) .. " | false", "Taipei")
+	Equal(Read(1, "EU", morning), "Stress test starts | October 21, 6:00 PM · in 08:00:00 | false", "London (BST)")
+	Equal(Read(-7, "US", morning), "Stress test starts | October 21, 2:00 PM · in 12:00:00 | false", "California")
+	Equal(Read(-7, "US", Utc(2026, 10, 21, 21)), "Stress test ends | October 21, 6:00 PM · in 04:00:00 | false", "California, as it starts")
+	Equal(Read(-4, "US", morning), "Stress test starts | October 21, 5:00 PM · in 12:00:00 | false", "New York")
+	Equal(Read(13, "US", morning), "Stress test starts | October 22, 10:00 AM · in 12:00:00 | false", "Auckland")
+	Equal(Read(9, "KR", morning), "Stress test starts | October 22, 6:00 AM · in 12:00:00 | false", "Seoul")
+	Equal(Read(8, "TW", morning), "Stress test starts | October 22, 5:00 AM · in 12:00:00 | false", "Taipei")
+	Equal(Read(3, "EU", Utc(2026, 10, 19, 9)), "Stress test starts | October 21, 8:00 PM · in " .. D_DAYS:format(2) .. " | false", "Helsinki, days before")
 	-- Europe's start isn't the others': 18:00 UTC is during it in Europe, before it elsewhere.
 	Equal(Read(0, "EU", Utc(2026, 10, 21, 18)):match("^[^|]*"), "Stress test ends ", "Europe at 18:00 UTC")
 	Equal(Read(0, "US", Utc(2026, 10, 21, 18)):match("^[^|]*"), "Stress test starts ", "the Americas at 18:00 UTC")
-	-- A region Blizzard gave no times for: the date only, by the player's calendar.
-	Equal(Read(8, "CN", morning), "Stress test starts | October 21 · Today | false", "no times, that day")
-	Equal(Read(8, "CN", Utc(2026, 10, 21, 16)), "Stress test ended | October 21 · " .. D_DAYS:format(1) .. " ago | true", "no times, the day after")
-	Equal(Read(0, nil, morning), "Stress test starts | October 21 · Today | false", "no region")
+	-- A region Blizzard gave no start time for: the start's date by the player's calendar, then
+	-- the end, the same moment everywhere.
+	Equal(Read(8, "CN", morning), "Stress test starts | October 21 · Today | false", "no start time, that day")
+	Equal(Read(8, "CN", Utc(2026, 10, 21, 16)), "Stress test ends | October 22, 9:00 AM · in 09:00:00 | false", "no start time, the next day")
+	Equal(Read(8, "CN", Utc(2026, 10, 22, 1)), "Stress test ended | October 22 · Today | true", "no start time, after")
+end)
+
+Test("with no region (the beta's), each region has its own line, earliest first, greyed and started once begun", function()
+	local function Read(now, key)
+		local rows
+		InZone(3, function() -- UTC+3, Helsinki's summer time
+			rows = ns.Lines(now, "")
+		end)
+		local row = rows[key]
+		local texts = {}
+		for i, line in ipairs(row.lines) do
+			texts[i] = line.text .. (line.done and " (grey)" or "")
+		end
+		return row.title .. " | " .. table.concat(texts, " / ")
+	end
+	Equal(Read(Utc(2026, 10, 21, 9), "stressTest"), "Stress test starts | Europe: October 21, 8:00 PM · in 08:00:00"
+		.. " / Americas & Oceania: October 22, 12:00 AM · in 12:00:00 / Korea: October 22, 12:00 AM · in 12:00:00"
+		.. " / Taiwan: October 22, 12:00 AM · in 12:00:00", "the morning")
+	Equal(Read(Utc(2026, 10, 21, 18), "stressTest"), "Stress test starts | Europe: started October 21 · Today (grey)"
+		.. " / Americas & Oceania: October 22, 12:00 AM · in 03:00:00 / Korea: October 22, 12:00 AM · in 03:00:00"
+		.. " / Taiwan: October 22, 12:00 AM · in 03:00:00", "Europe has started")
+	Equal(Read(Utc(2026, 10, 21, 21), "stressTest"), "Stress test ends | October 22, 4:00 AM · in 04:00:00", "all have started")
+	Equal(Read(Utc(2026, 10, 22, 1), "stressTest"), "Stress test ended | October 22 · Today (grey)", "over")
+	Equal(Read(Utc(2026, 10, 25, 12), "reservation"), "Name reservation starts | Europe: October 27, 8:00 PM · in " .. D_DAYS:format(2)
+		.. " / Americas & Oceania: October 27, 11:00 PM · in " .. D_DAYS:format(2) .. " / Korea: October 28, 1:00 AM · in " .. D_DAYS:format(3)
+		.. " / Taiwan: October 28, 2:00 AM · in " .. D_DAYS:format(3), "name reservation, days before")
+	Equal(Read(Utc(2026, 10, 27, 22, 30), "reservation"), "Name reservation starts | Europe: started October 27 · " .. D_DAYS:format(1) .. " ago (grey)"
+		.. " / Americas & Oceania: started October 27 · " .. D_DAYS:format(1) .. " ago (grey) / Korea: started October 28 · Today (grey)"
+		.. " / Taiwan: October 28, 2:00 AM · in 00:30:00", "only Taiwan left, past midnight")
+	Equal(Read(Utc(2026, 10, 27, 23), "reservation"), "Name reservation ends | November 3 · in " .. D_DAYS:format(6), "all have started")
+	-- The beta's end is one moment everywhere: one line.
+	Equal(Read(Utc(2026, 10, 21, 9), "betaEnds"), "Beta ends | October 23, 8:00 PM · in " .. D_DAYS:format(2), "the beta's end")
+	-- nil, as the stand-in gives without GetCurrentRegionName, reads the same as "".
+	Equal(#ns.Lines(Utc(2026, 10, 21, 9)).stressTest.lines, 4, "no region at all")
 end)
 
 Test("name reservation starts at its region's time, in the player's own time", function()
 	local function Read(zone, region, now)
 		local line
 		InZone(zone, function()
-			local lines = ns.Lines(now, region)
+			local lines = Lines(now, region)
 			line = lines.reservation.title .. " | " .. lines.reservation.line
 		end)
 		return line
@@ -205,7 +260,7 @@ Test("name reservation starts at its region's time, in the player's own time", f
 	Equal(Read(9, "KR", before), "Name reservation starts | October 28, 7:00 AM · in " .. D_DAYS:format(2), "Seoul, 07:00 KST")
 	Equal(Read(8, "TW", before), "Name reservation starts | October 28, 7:00 AM · in " .. D_DAYS:format(2), "Taipei, 07:00 CST")
 	-- At its start it turns to the end, November 3, a date only.
-	Equal(Read(-7, "US", Utc(2026, 10, 27, 20) - 1), "Name reservation starts | October 27, 1:00 PM · Today", "California, a second before")
+	Equal(Read(-7, "US", Utc(2026, 10, 27, 20) - 1), "Name reservation starts | October 27, 1:00 PM · in 00:00:01", "California, a second before")
 	Equal(Read(-7, "US", Utc(2026, 10, 27, 20)), "Name reservation ends | November 3 · in " .. D_DAYS:format(7), "California, at the start")
 	Equal(Read(1, "EU", Utc(2026, 10, 27, 17)), "Name reservation ends | November 3 · in " .. D_DAYS:format(7), "Paris, at the start")
 	Equal(Read(1, "US", Utc(2026, 10, 27, 17)):match("^[^|]*"), "Name reservation starts ", "an American realm at Europe's start")
@@ -221,31 +276,31 @@ Test("the clock counts days, hours, minutes and seconds to the launch, then stay
 		d, h, m, s = ns.ClockParts(ns.LAUNCH + after)
 		Equal(string.format("%d %d %d %d", d, h, m, s), "0 0 0 0", after .. " seconds after launch")
 	end
-	Equal(ns.Lines(ns.LAUNCH - 1).launched, false, "not launched a second before")
-	Equal(ns.Lines(ns.LAUNCH).launched, true, "launched at launch")
+	Equal(Lines(ns.LAUNCH - 1).launched, false, "not launched a second before")
+	Equal(Lines(ns.LAUNCH).launched, true, "launched at launch")
 end)
 
 Test("the launch line: the moment before, then the launch's own date and how many days ago", function()
 	InZone(2, function()
-		local lines = ns.Lines(ns.LAUNCH - 1)
+		local lines = Lines(ns.LAUNCH - 1)
 		Equal(lines.launch.title, "launches", "Helsinki, a second before")
 		Equal(lines.launch.line, ns.LaunchText(), "Helsinki, a second before")
 		Equal(lines.launch.done, false, "not done before")
-		lines = ns.Lines(ns.LAUNCH)
+		lines = Lines(ns.LAUNCH)
 		Equal(lines.launch.title, "launched", "Helsinki, at launch")
 		-- 01:00 on November 5 in Helsinki: the launch is today there, on the 5th.
 		Equal(lines.launch.line, "November 5 · Today", "Helsinki, at launch")
 		Equal(lines.launch.done, true, "done at launch")
-		Equal(ns.Lines(Utc(2026, 11, 6, 22)).launch.line, "November 5 · " .. D_DAYS:format(2) .. " ago", "Helsinki, two days later")
+		Equal(Lines(Utc(2026, 11, 6, 22)).launch.line, "November 5 · " .. D_DAYS:format(2) .. " ago", "Helsinki, two days later")
 	end)
 	InZone(-8, function()
-		Equal(ns.Lines(ns.LAUNCH + 3600).launch.line, "November 4 · Today", "California, an hour after")
-		Equal(ns.Lines(ns.LAUNCH + 9 * 3600).launch.line, "November 4 · " .. D_DAYS:format(1) .. " ago", "California, the next morning")
+		Equal(Lines(ns.LAUNCH + 3600).launch.line, "November 4 · Today", "California, an hour after")
+		Equal(Lines(ns.LAUNCH + 9 * 3600).launch.line, "November 4 · " .. D_DAYS:format(1) .. " ago", "California, the next morning")
 	end)
 end)
 
 Test("after the launch every milestone is behind", function()
-	local lines = ns.Lines(ns.LAUNCH + 2 * DAY)
+	local lines = Lines(ns.LAUNCH + 2 * DAY)
 	for _, key in ipairs({ "betaBegan", "stressTest", "betaEnds", "reservation", "launch" }) do
 		Equal(lines[key].done, true, key)
 	end
@@ -419,7 +474,8 @@ Test("the panel before the launch: the milestones, the clock, no last line", fun
 	Has(game, "Countdown to", "header")
 	Has(game, "- September 17 · 18 Days ago", "beta began")
 	Has(game, "Stress test starts", "stress test")
-	Has(game, "- October 21, 5:00 PM · in 16 Days", "stress test (UTC, Europe)")
+	Has(game, "- Europe: October 21, 5:00 PM · in 16 Days", "stress test (UTC, the beta's no region)")
+	Has(game, "- Taiwan: October 27, 11:00 PM · in 22 Days", "name reservation (UTC)")
 	Has(game, "Beta ends", "beta")
 	Has(game, "- October 23, 5:00 PM · in 18 Days", "beta")
 	Has(game, "Name reservation starts", "reservation")
@@ -470,6 +526,30 @@ Test("at the launch everything greys, the clock stays at zeros and the last line
 	-- The quill rests, greyed.
 	local quillDiscs = Count(game, function(w) return w.texture == DISC and w.parent and w.parent.texture == nil and not w.calls.SetBlendMode and (w.color and w.color[1] ~= w.color[3]) end)
 	Equal(quillDiscs, 0, "no gold left on the quill")
+end)
+
+Test("the panel lays out each region's line, and shrinks when the last region starts", function()
+	local game = Panel(Utc(2026, 10, 21, 21) - 2)
+	local before = game.panel:GetHeight()
+	Has(game, "- Europe: started October 21 · Today", "Europe's line, started")
+	Grey(game:Find("- Europe: started October 21 · Today"), "Europe's line")
+	Has(game, "- Taiwan: October 21, 9:00 PM · in 00:00:02", "Taiwan's countdown")
+	game:Frames(240, 4)
+	Has(game, "Stress test ends", "all started")
+	Equal(game:Find("Taiwan: October 21"), nil, "the region lines are gone")
+	Equal(game.panel:GetHeight() < before, true, "the panel shrinks by three lines")
+	-- The row under it follows the last line shown.
+	local beta = game:Find("Beta ends")
+	local _, anchor = beta:GetPoint(1)
+	Equal(anchor, game:Find("- October 22, 1:00 AM · in 03:59:58") or game:Find("- October 22, 1:00 AM · in 03:59:59"), "Beta ends under the stress test's one line")
+	Clean(game, "regions")
+	game = Panel(Utc(2026, 10, 21, 12))
+	local width = game.panel:GetWidth()
+	for _ = 1, 5 do
+		game:Frames(60, 1)
+		Equal(game.panel:GetWidth(), width, "the same width as the countdown ticks")
+	end
+	Clean(game, "countdown")
 end)
 
 Test("the stress test's blue \"!\" greys once the test is over", function()
@@ -572,7 +652,10 @@ Test("before the tracker has a place, the panel uses Blizzard's; once moved it s
 end)
 
 Test("the header's art keeps its size, or stretches to a panel wider than it", function()
-	local game = Panel(Utc(2026, 10, 5, 12))
+	-- A realm with a region: one line per milestone, so the panel is a tracker section's width.
+	local game = NewGame(Utc(2026, 10, 5, 12))
+	game.region = "US"
+	game:Load():Frames(2)
 	local art
 	for _, widget in ipairs(game.widgets) do
 		if widget.atlas == "UI-QuestTracker-Secondary-Objective-Header" then

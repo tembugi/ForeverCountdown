@@ -411,6 +411,7 @@ local shownLaunched -- whether the panel shows Forever as launched
 local titleWidthTexts -- the header's "Countdown to" and "Forever"
 local headerArt, headerArtWidth -- the header's art and its own width
 local clock -- the timer, in the header after the title
+local measure -- an unseen text for measuring a countdown line with zeros (see FitWidth)
 
 -- The panel is at least as wide as a tracker section, and wide enough for its longest line:
 -- the header ("Countdown to Forever", the clock and the button) or any row. The width
@@ -429,9 +430,21 @@ local function FitWidth()
 		end
 		width = math.max(width, HEADER_TEXT_X + ICON_COLUMN + ICON_GAP + welcome + 4 + RIGHT_MARGIN)
 	end
-	-- Every row's title and line too: the launch date is the game's full date and time.
+	-- Every row's title and lines too: the launch date is the game's full date and time. A line
+	-- counting down is measured with zeros for its figures, so the panel doesn't change width
+	-- from one second to the next.
 	for _, row in ipairs(rows) do
-		local text = math.max(row.title:GetStringWidth(), row.line:GetStringWidth())
+		local text = row.title:GetStringWidth()
+		for i = 1, row.shownLines do
+			local line = row.lines[i]
+			local zeros, counting = (line:GetText() or ""):gsub("%d%d:%d%d:%d%d", "00:00:00")
+			if counting > 0 then
+				measure:SetText(zeros)
+				text = math.max(text, measure:GetStringWidth())
+			else
+				text = math.max(text, line:GetStringWidth())
+			end
+		end
 		width = math.max(width, HEADER_TEXT_X + ICON_COLUMN + ICON_GAP + text + RIGHT_MARGIN)
 	end
 	width = math.ceil(width)
@@ -492,37 +505,75 @@ local function FollowTracker()
 	end
 end
 
--- A milestone: a marker on the left, a title in gold and a line under it, as a quest shows in
--- the tracker; greyed once it is behind. The titles use the game's bright gold (the tracker's
--- highlight color): its resting header gold read too dim in game (the user, 0.1.1).
--- Each milestone sits under the one above it, so the rows follow the text's height.
+-- A milestone: a marker on the left, a title in gold and its lines under it, as a quest shows
+-- its objectives in the tracker; greyed once behind. The titles use the game's bright gold (the
+-- tracker's highlight color): its resting header gold read too dim in game (the user, 0.1.1).
+-- Each milestone sits under the last line of the one above it, so the rows follow the text's
+-- height and the number of lines.
+local function PlaceTitle(row)
+	local above = row.above
+	if above then
+		row.title:ClearAllPoints()
+		row.title:SetPoint("TOPLEFT", above.lines[above.shownLines], "BOTTOMLEFT", 0, -ROW_GAP)
+	end
+end
+
+local function AddLine(row)
+	local line = CreateText(row, lineFont)
+	line:SetPoint("TOPLEFT", row.lines[#row.lines] or row.title, "BOTTOMLEFT", 0, -LINE_GAP)
+	row.lines[#row.lines + 1] = line
+	return line
+end
+
 local function CreateRow(parent, above)
 	local row = CreateFrame("Frame", nil, parent)
 	row:SetAllPoints()
 	row.title = CreateText(row, lineFont)
+	row.lines = {}
+	row.line = AddLine(row)
+	row.shownLines = 1
+	row.above = above
 	if above then
-		row.title:SetPoint("TOPLEFT", above.line, "BOTTOMLEFT", 0, -ROW_GAP)
+		above.below = row
+		PlaceTitle(row)
 	else
 		row.title:SetPoint("TOPLEFT", HEADER_TEXT_X + ICON_COLUMN + ICON_GAP, -HEADER_HEIGHT - ROW_TOP_GAP)
 	end
-	row.line = CreateText(row, lineFont)
-	row.line:SetPoint("TOPLEFT", row.title, "BOTTOMLEFT", 0, -LINE_GAP)
 	row.icon = CreateFrame("Frame", nil, row)
 	row.icon:SetSize(ICON_COLUMN, ICON_COLUMN)
 	row.icon:SetPoint("CENTER", row.title, "LEFT", -ICON_GAP - ICON_COLUMN / 2, 0)
 	return row
 end
 
-local function SetRow(row, title, line, done)
-	row.title:SetText(title)
-	row.line:SetText(QUEST_DASH .. line)
+local function SetGreyText(text, done, r, g, b)
 	if done then
-		row.title:SetTextColor(TrackerColor("Complete", 0.6, 0.6, 0.6))
-		row.line:SetTextColor(TrackerColor("Complete", 0.6, 0.6, 0.6))
+		text:SetTextColor(TrackerColor("Complete", 0.6, 0.6, 0.6))
 	else
-		row.title:SetTextColor(GOLD.r, GOLD.g, GOLD.b)
-		row.line:SetTextColor(TrackerColor("Normal", 0.8, 0.8, 0.8))
+		text:SetTextColor(r, g, b)
 	end
+end
+
+-- Sets a row from Countdown.lua's (ns.Lines) and returns whether its number of lines changed.
+local function SetRow(row, entry, title)
+	row.title:SetText(title or entry.title)
+	SetGreyText(row.title, entry.done, GOLD.r, GOLD.g, GOLD.b)
+	for i, line in ipairs(entry.lines) do
+		local text = row.lines[i] or AddLine(row)
+		text:SetText(QUEST_DASH .. line.text)
+		SetGreyText(text, line.done, TrackerColor("Normal", 0.8, 0.8, 0.8))
+		text:Show()
+	end
+	for i = #entry.lines + 1, #row.lines do
+		row.lines[i]:Hide()
+	end
+	if row.shownLines == #entry.lines then
+		return false
+	end
+	row.shownLines = #entry.lines
+	if row.below then
+		PlaceTitle(row.below)
+	end
+	return true
 end
 
 local function SetGreyed(marker, greyed)
@@ -547,10 +598,12 @@ local function Refresh()
 	-- The player's region, for the start times that differ by region; without it, those show
 	-- their date only.
 	local lines = ns.Lines(now, GetCurrentRegionName and GetCurrentRegionName())
-	SetRow(rows[1], lines.betaBegan.title, lines.betaBegan.line, true)
-	SetRow(rows[2], lines.stressTest.title, lines.stressTest.line, lines.stressTest.done)
-	SetRow(rows[3], lines.betaEnds.title, lines.betaEnds.line, lines.betaEnds.done)
-	SetRow(rows[4], lines.reservation.title, lines.reservation.line, lines.reservation.done)
+	-- A row that gains or loses lines (a region's line each, until all have started) changes
+	-- the panel's height.
+	local grown = SetRow(rows[1], lines.betaBegan)
+	grown = SetRow(rows[2], lines.stressTest) or grown
+	grown = SetRow(rows[3], lines.betaEnds) or grown
+	grown = SetRow(rows[4], lines.reservation) or grown
 	-- The blue "!" greys like the gold one once the stress test is over.
 	SetGreyed(stressTestMarker, lines.stressTest.done)
 	turnInMarker:SetDesaturated(lines.betaEnds.done)
@@ -562,7 +615,7 @@ local function Refresh()
 	SetQuillDone(quill, lines.reservation.done)
 	-- "Forever launches", its title in two texts, so the row's own title stays empty.
 	local launch = lines.launch
-	SetRow(rows[5], "", launch.line, launch.done)
+	grown = SetRow(rows[5], launch, "") or grown
 	launchRest:SetText(launch.title)
 	if launch.done then
 		launchRest:SetTextColor(TrackerColor("Complete", 0.6, 0.6, 0.6))
@@ -580,10 +633,11 @@ local function Refresh()
 		SetInfinityLit(launchInfinity, not shownLaunched)
 		SetInfinityLit(welcomeInfinity, shownLaunched)
 		infinity = shownLaunched and welcomeInfinity or launchInfinity
-		-- The panel grows by the new line: measure it on the next frame, once it is laid out.
-		if panel.openHeight then
-			C_Timer.After(0, ns.SafeRelayout)
-		end
+		grown = true
+	end
+	-- The panel grows or shrinks by the lines: measure it on the next frame, once it is laid out.
+	if grown and panel.openHeight then
+		C_Timer.After(0, ns.SafeRelayout)
 	end
 	-- The lines' texts change with the days ("Today", "Name reservation ends"), so the width is
 	-- fitted to them again each time.
@@ -753,7 +807,10 @@ local function Relayout()
 		if i == 5 then
 			titleHeight = launchWordText:GetStringHeight()
 		end
-		height = height + titleHeight + LINE_GAP + row.line:GetStringHeight()
+		height = height + (i > 1 and ROW_GAP or 0) + titleHeight
+		for k = 1, row.shownLines do
+			height = height + LINE_GAP + row.lines[k]:GetStringHeight()
+		end
 	end
 	if rows[6]:IsShown() then
 		height = height + ROW_GAP + welcomeTexts[1]:GetStringHeight()
@@ -843,6 +900,8 @@ local function Build()
 	for i = 1, 6 do
 		rows[i] = CreateRow(body, rows[i - 1])
 	end
+	measure = CreateText(body, lineFont)
+	measure:SetAlpha(0)
 	Marker(rows[1], QUEST_AVAILABLE_ART, 20, true)
 	stressTestMarker = Marker(rows[2], QUEST_DAILY_ART, 16) -- the same art size as the "?"
 	turnInMarker = Marker(rows[3], QUEST_TURN_IN_ART, 16)

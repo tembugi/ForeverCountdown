@@ -616,9 +616,9 @@ local function NewGame(now)
 	function GetServerTime()
 		return game.now
 	end
-	-- The realm's region. Blizzard's code compares it with "US" and "CN" (wow-ui-source, forever).
-	-- ASSUMED: "EU", "KR" and "TW" for the other regions, and "EU" for the user's own (Finland).
-	game.region = "EU"
+	-- The realm's region: none ("") on the beta (seen in game, 1.2.0). Blizzard's code compares it
+	-- with "US" and "CN" (wow-ui-source, forever). ASSUMED: "EU", "KR" and "TW" for the others.
+	game.region = ""
 	function GetCurrentRegionName()
 		return game.region
 	end

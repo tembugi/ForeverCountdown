@@ -42,22 +42,20 @@ end
 --   21:00 to 01:00 UTC; in Europe 19:00 CEST to 03:00, 17:00 to 01:00 UTC;
 -- - name reservation's start (Blizzard's post of October 20): October 27 at 1:00 p.m. PDT in
 --   North America, 18:00 CET in Europe, October 28 at 07:00 KST in Korea and 07:00 CST in Taiwan.
--- Start times that differ by region are read for the player's region (GetCurrentRegionName). A
--- milestone with only a Pacific date (the beta's start, name reservation's end, and the regional
--- ones in a region Blizzard gave no time for) can't become a local moment: it shows the date as
--- announced and counts days on the player's own calendar, so on that date the line says "Today"
--- wherever the player is (the user asked for local time, 1.0.0; Pacific days made "Today" start
--- at 10:00 in Finland).
+-- Start times that differ by region show for the player's region (GetCurrentRegionName). The
+-- beta knows no region (seen in game, 1.2.0), so without one each region gets its own line (the
+-- user asked, 1.2.0). A milestone with only a Pacific date (the beta's start, name reservation's
+-- end, and the regional ones in a region Blizzard gave no time for) can't become a local moment:
+-- it shows the date as announced and counts days on the player's own calendar, so on that date
+-- the line says "Today" wherever the player is (the user asked for local time, 1.0.0; Pacific
+-- days made "Today" start at 10:00 in Finland).
 ns.BETA_START = { day = CivilDay(2026, 9, 17) }
 ns.STRESS_TEST_START = {
 	day = CivilDay(2026, 10, 21),
 	US = Utc(2026, 10, 21, 21), KR = Utc(2026, 10, 21, 21), TW = Utc(2026, 10, 21, 21),
 	EU = Utc(2026, 10, 21, 17),
 }
-ns.STRESS_TEST_END = {
-	day = CivilDay(2026, 10, 21),
-	US = Utc(2026, 10, 22, 1), KR = Utc(2026, 10, 22, 1), TW = Utc(2026, 10, 22, 1), EU = Utc(2026, 10, 22, 1),
-}
+ns.STRESS_TEST_END = { moment = Utc(2026, 10, 22, 1) } -- the same in every region
 ns.BETA_END = { moment = Utc(2026, 10, 23, 17) }
 ns.RESERVATION_START = {
 	day = CivilDay(2026, 10, 27),
@@ -65,6 +63,17 @@ ns.RESERVATION_START = {
 }
 ns.RESERVATION_END = { day = CivilDay(2026, 11, 3) }
 ns.LAUNCH = Utc(2026, 11, 4, 23)
+
+-- The regions Blizzard gave times for, in this order when their times are the same, and their
+-- names: the game's own (EUROPE, KOREA, TAIWAN) and the addon's for the Americas, which the
+-- game has no name for. Region keys as GetCurrentRegionName gives them.
+local REGIONS = { "US", "EU", "KR", "TW" }
+local function RegionName(region)
+	if region == "US" then
+		return ns.TEXT.americasOceania
+	end
+	return _G[({ EU = "EUROPE", KR = "KOREA", TW = "TAIWAN" })[region]] or region
+end
 
 -- English, like the rest of the addon's own words. The game has no strings for these.
 ns.TEXT = {
@@ -84,6 +93,9 @@ ns.TEXT = {
 	welcomeTo = "Welcome to", -- then "Forever" and "!", the last line once Forever has launched
 	welcomeEnd = "!",
 	inDays = "in %s",
+	americasOceania = "Americas & Oceania",
+	regionLine = "%s: %s", -- a region's name, then its line
+	regionStarted = "%s: started %s", -- the same once it has started, greyed (the user asked)
 }
 
 -- Month and weekday names are the game's own, in the player's language (the global strings
@@ -133,9 +145,10 @@ end
 ns.DayLine = DayLine
 
 -- The same for a moment, on the day it falls on where the player is, with its time in the
--- player's own time zone until it has passed: "October 23, 19:00 · in 2 Days", "October 23,
--- 19:00 · Today", then "October 23 · Today" and "October 23 · 2 Days ago". The time is the
--- game's clock's (GameTime_GetFormattedTime, its 12/24-hour setting).
+-- player's own time zone until it has passed: "October 23, 19:00 · in 2 Days", within a day a
+-- countdown, "October 23, 19:00 · in 04:12:33" (the user asked, 1.2.0), then "October 23 ·
+-- Today" and "October 23 · 2 Days ago". The time is the game's clock's
+-- (GameTime_GetFormattedTime, its 12/24-hour setting).
 local function MomentLine(moment, now)
 	local day = LocalDay(moment)
 	if now >= moment then
@@ -143,18 +156,51 @@ local function MomentLine(moment, now)
 	end
 	local t = date("*t", moment)
 	local time = GameTime_GetFormattedTime(tonumber(t.hour) or 0, tonumber(t.min) or 0, true)
+	local left = moment - now
+	if left < DAY then
+		local countdown = string.format("%02d:%02d:%02d", math.floor(left / HOUR), math.floor(left / 60) % 60, math.floor(left % 60))
+		return DayText(day) .. ", " .. time .. " · " .. ns.TEXT.inDays:format(countdown)
+	end
 	return DayText(day) .. ", " .. time .. DayCount(day, now)
 end
 ns.MomentLine = MomentLine
 
--- A milestone's moment in the player's region, or nil when it has only a date there.
-local function MomentIn(milestone, region)
-	return milestone.moment or (region and milestone[region])
+-- Whether the game named the player's region. The beta names none ("", seen in game, 1.2.0).
+local function Known(region)
+	return region ~= nil and region ~= ""
 end
 
--- Whether a milestone is behind: its moment has come, or its date has passed on the player's
--- own calendar.
+-- A milestone's moment in the player's region, or nil when it has only a date there.
+local function MomentIn(milestone, region)
+	return milestone.moment or (Known(region) and milestone[region]) or nil
+end
+
+-- A milestone's moment in each region Blizzard gave a time for, earliest first, when the
+-- player's region isn't known and the times differ by region; nil otherwise.
+local function RegionMoments(milestone, region)
+	if milestone.moment or Known(region) or not milestone[REGIONS[1]] then
+		return nil
+	end
+	local list = {}
+	for i, key in ipairs(REGIONS) do
+		list[#list + 1] = { region = key, moment = milestone[key], order = i }
+	end
+	table.sort(list, function(a, b)
+		if a.moment ~= b.moment then
+			return a.moment < b.moment
+		end
+		return a.order < b.order
+	end)
+	return list
+end
+
+-- Whether a milestone is behind: its moment has come (in every region, when the player's isn't
+-- known), or its date has passed on the player's own calendar.
 local function Passed(milestone, region, now)
+	local regions = RegionMoments(milestone, region)
+	if regions then
+		return now >= regions[#regions].moment
+	end
 	local moment = MomentIn(milestone, region)
 	if moment then
 		return now >= moment
@@ -163,14 +209,25 @@ local function Passed(milestone, region, now)
 end
 ns.Passed = Passed
 
-local function MilestoneLine(milestone, region, now)
-	local moment = MomentIn(milestone, region)
-	if moment then
-		return MomentLine(moment, now)
+-- A milestone's lines, each { text = ..., done = ... }: its moment or date, or, when the player's
+-- region isn't known and the times differ by region, a line for each region, greyed and saying
+-- "started" once that region's time has come (the user asked, 1.2.0).
+local function MilestoneLines(milestone, region, now, done)
+	local regions = RegionMoments(milestone, region)
+	if regions then
+		local lines = {}
+		for i, entry in ipairs(regions) do
+			local started = now >= entry.moment
+			local format = started and ns.TEXT.regionStarted or ns.TEXT.regionLine
+			lines[i] = { text = format:format(RegionName(entry.region), MomentLine(entry.moment, now)), done = started }
+		end
+		return lines
 	end
-	return DayLine(milestone.day, now)
+	local moment = MomentIn(milestone, region)
+	local text = moment and MomentLine(moment, now) or DayLine(milestone.day, now)
+	return { { text = text, done = done } }
 end
-ns.MilestoneLine = MilestoneLine
+ns.MilestoneLines = MilestoneLines
 
 -- Days, hours, minutes and seconds left to launch. Once Forever has launched the clock stays at
 -- zeros (the user asked, 1.1.0).
@@ -205,38 +262,42 @@ function ns.HasLaunched(now)
 	return now >= ns.LAUNCH
 end
 
--- What each line of the panel says at a moment: a title, the line under it, and whether the
--- milestone is behind (shown greyed like a finished quest line). Before the launch its line is
--- the launch moment in the player's own time; after it, the launch's own local date with how
--- many days ago, like the others (the user chose this, 1.1.0). `region` is the player's
--- (GetCurrentRegionName), for the start times that differ by region.
+-- What each row of the panel says at a moment: a title, the lines under it (each
+-- { text = ..., done = ... }), and whether the milestone is behind (shown greyed like a finished
+-- quest line). Before the launch its line is the launch moment in the player's own time; after
+-- it, the launch's own local date with how many days ago, like the others (the user chose this,
+-- 1.1.0). `region` is the player's (GetCurrentRegionName), for the start times that differ by
+-- region.
 function ns.Lines(now, region)
 	local T = ns.TEXT
-	local lines = {}
-	lines.betaBegan = { title = T.betaBegan, line = MilestoneLine(ns.BETA_START, region, now), done = true }
+	local rows = {}
+	local function Row(title, milestone, done)
+		return { title = title, lines = MilestoneLines(milestone, region, now, done), done = done }
+	end
+	rows.betaBegan = Row(T.betaBegan, ns.BETA_START, true)
 	-- A milestone with a start and an end: "starts" until its start, "ends" until its end, then
 	-- "ended", greyed.
 	local function Span(start, finish, starts, ends, ended)
 		if not Passed(start, region, now) then
-			return { title = starts, line = MilestoneLine(start, region, now), done = false }
+			return Row(starts, start, false)
 		elseif not Passed(finish, region, now) then
-			return { title = ends, line = MilestoneLine(finish, region, now), done = false }
+			return Row(ends, finish, false)
 		end
-		return { title = ended, line = MilestoneLine(finish, region, now), done = true }
+		return Row(ended, finish, true)
 	end
 	-- The stress test, between the beta's start and end (the user asked for its own row, 1.2.0).
-	lines.stressTest = Span(ns.STRESS_TEST_START, ns.STRESS_TEST_END, T.stressTestStarts, T.stressTestEnds, T.stressTestEnded)
+	rows.stressTest = Span(ns.STRESS_TEST_START, ns.STRESS_TEST_END, T.stressTestStarts, T.stressTestEnds, T.stressTestEnded)
 	local betaOver = Passed(ns.BETA_END, region, now)
-	lines.betaEnds = { title = betaOver and T.betaEnded or T.betaEnds, line = MilestoneLine(ns.BETA_END, region, now), done = betaOver }
-	lines.reservation = Span(ns.RESERVATION_START, ns.RESERVATION_END, T.reservationStarts, T.reservationEnds, T.reservationEnded)
+	rows.betaEnds = Row(betaOver and T.betaEnded or T.betaEnds, ns.BETA_END, betaOver)
+	rows.reservation = Span(ns.RESERVATION_START, ns.RESERVATION_END, T.reservationStarts, T.reservationEnds, T.reservationEnded)
 	local launched = ns.HasLaunched(now)
-	lines.launched = launched
+	rows.launched = launched
 	if launched then
-		lines.launch = { title = T.launched, line = DayLine(LocalDay(ns.LAUNCH), now), done = true }
+		rows.launch = { title = T.launched, lines = { { text = DayLine(LocalDay(ns.LAUNCH), now), done = true } }, done = true }
 	else
-		lines.launch = { title = T.launches, line = ns.LaunchText(), done = false }
+		rows.launch = { title = T.launches, lines = { { text = ns.LaunchText(), done = false } }, done = false }
 	end
-	return lines
+	return rows
 end
 
 -- The saved layout's version. Raise it only when a change stores the data differently, and
